@@ -1,0 +1,40 @@
+# Build artifacts
+webserv
+obj/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Debug and profiling
+core
+core.*
+*.core
+*.out
+*.pid
+*.log
+
+# OS / Editor files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test/temp
+tmp/
+temp/
+*.tmp
+
+# CMake (if used later)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile.user
