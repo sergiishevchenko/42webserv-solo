@@ -72,4 +72,3 @@ The project uses:
 - **80 characters** column limit
 - **C++98** compatible style
 - **Attach braces** style (opening braces on same line)
-

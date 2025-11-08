@@ -76,5 +76,3 @@ lint:
 		echo "Warning: clang-tidy not found. Install it with: brew install llvm"; \
 		echo "Skipping linting..."; \
 	fi
-
-
