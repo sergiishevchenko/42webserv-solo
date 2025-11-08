@@ -30,6 +30,9 @@ class Logger {
     Logger& operator=(const Logger&);
 
     std::string getLevelString(LogLevel level) const;
+    std::string getLevelColor(LogLevel level) const;
+    std::string getTextColor(LogLevel level) const;
+    bool isTerminal(std::ostream& stream) const;
     std::ostream& log(LogLevel level, const std::string& prefix);
 };
 
