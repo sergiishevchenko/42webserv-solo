@@ -1,9 +1,9 @@
 ---
 Language: Cpp
 BasedOnStyle: Google
-IndentWidth: 1
-TabWidth: 1
-UseTab: Always
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
 ColumnLimit: 80
 AccessModifierOffset: -1
 AlignAfterOpenBracket: Align
