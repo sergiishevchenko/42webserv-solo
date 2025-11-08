@@ -1,9 +1,11 @@
-#include <iostream>
 #include <string>
+#include <sstream>
 #include "Config.hpp"
+#include "Logger.hpp"
 
 static void printUsage(const char* progName) {
-    std::cerr << "Usage: " << progName << " <configuration file>" << std::endl;
+    LOG_ERROR() << "Usage: " << progName << " <configuration file>"
+                << std::endl;
 }
 
 int main(int argc, char** argv) {
@@ -16,77 +18,81 @@ int main(int argc, char** argv) {
     Config config;
 
     if (!config.loadFromFile(configPath)) {
-        std::cerr << "Error: " << config.getLastError() << std::endl;
+        LOG_ERROR() << config.getLastError() << std::endl;
         return 1;
     }
 
     if (!config.validate()) {
-        std::cerr << "Error: " << config.getLastError() << std::endl;
+        LOG_ERROR() << config.getLastError() << std::endl;
         return 1;
     }
 
-    std::cout << "webserv: Configuration loaded successfully" << std::endl;
+    LOG_INFO() << "webserv: Configuration loaded successfully" << std::endl;
     const std::vector<ServerConfig>& servers = config.getServers();
-    std::cout << "Found " << servers.size() << " server block(s)" << std::endl;
+    LOG_INFO() << "Found " << servers.size() << " server block(s)"
+               << std::endl;
 
     for (size_t i = 0; i < servers.size(); ++i) {
         const ServerConfig& s = servers[i];
-        std::cout << "\n--- Server block " << (i + 1) << " ---" << std::endl;
-        std::cout << "Listen: ";
+        std::ostringstream oss;
+
+        oss << "\n--- Server block " << (i + 1) << " ---\n";
+        oss << "Listen: ";
         for (size_t j = 0; j < s.listen.size(); ++j) {
             if (j > 0)
-                std::cout << ", ";
-            std::cout << s.listen[j].first << ":" << s.listen[j].second;
+                oss << ", ";
+            oss << s.listen[j].first << ":" << s.listen[j].second;
         }
-        std::cout << std::endl;
-        std::cout << "Root: " << s.root << std::endl;
-        std::cout << "Index: " << s.index << std::endl;
-        std::cout << "Client max body size: " << s.client_max_body_size
-                  << " bytes" << std::endl;
+        oss << "\n";
+        oss << "Root: " << s.root << "\n";
+        oss << "Index: " << s.index << "\n";
+        oss << "Client max body size: " << s.client_max_body_size
+            << " bytes\n";
         if (!s.error_pages.empty()) {
-            std::cout << "Error pages: ";
+            oss << "Error pages: ";
             for (std::map<int, std::string>::const_iterator it =
                      s.error_pages.begin();
                  it != s.error_pages.end(); ++it) {
                 if (it != s.error_pages.begin())
-                    std::cout << ", ";
-                std::cout << it->first << " -> " << it->second;
+                    oss << ", ";
+                oss << it->first << " -> " << it->second;
             }
-            std::cout << std::endl;
+            oss << "\n";
         }
-        std::cout << "Locations: " << s.locations.size() << std::endl;
+        oss << "Locations: " << s.locations.size() << "\n";
         for (size_t j = 0; j < s.locations.size(); ++j) {
             const Location& loc = s.locations[j];
-            std::cout << "  [" << loc.path << "] ";
+            oss << "  [" << loc.path << "] ";
             if (!loc.methods.empty()) {
-                std::cout << "methods: ";
+                oss << "methods: ";
                 for (std::set<std::string>::const_iterator it =
                          loc.methods.begin();
                      it != loc.methods.end(); ++it) {
                     if (it != loc.methods.begin())
-                        std::cout << " ";
-                    std::cout << *it;
+                        oss << " ";
+                    oss << *it;
                 }
-                std::cout << " | ";
+                oss << " | ";
             }
             if (!loc.upload_store.empty())
-                std::cout << "upload_store: " << loc.upload_store << " | ";
+                oss << "upload_store: " << loc.upload_store << " | ";
             if (!loc.redirect.empty())
-                std::cout << "redirect: " << loc.redirect << " | ";
+                oss << "redirect: " << loc.redirect << " | ";
             if (loc.autoindex)
-                std::cout << "autoindex: on | ";
+                oss << "autoindex: on | ";
             if (!loc.cgi_pass.empty()) {
-                std::cout << "cgi_pass: ";
+                oss << "cgi_pass: ";
                 for (std::map<std::string, std::string>::const_iterator it =
                          loc.cgi_pass.begin();
                      it != loc.cgi_pass.end(); ++it) {
                     if (it != loc.cgi_pass.begin())
-                        std::cout << ", ";
-                    std::cout << it->first << " -> " << it->second;
+                        oss << ", ";
+                    oss << it->first << " -> " << it->second;
                 }
             }
-            std::cout << std::endl;
+            oss << "\n";
         }
+        LOG_INFO() << oss.str();
     }
 
     return 0;
