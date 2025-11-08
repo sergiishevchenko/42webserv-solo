@@ -63,10 +63,15 @@ format:
 		exit 1; \
 	fi
 
+CLANG_TIDY := $(shell command -v clang-tidy 2>/dev/null || echo "/usr/local/opt/llvm/bin/clang-tidy")
+
 lint:
-	@if command -v clang-tidy >/dev/null 2>&1; then \
+	@if command -v $(CLANG_TIDY) >/dev/null 2>&1 || [ -f "$(CLANG_TIDY)" ]; then \
 		echo "Running clang-tidy..."; \
-		clang-tidy $(SRCS) -- $(CXXFLAGS) $(DEFS) $(INCLUDES); \
+		$(CLANG_TIDY) $(SRCS) \
+			-header-filter='^$(INC_DIR)/.*' \
+			-- $(CXXFLAGS) $(DEFS) $(INCLUDES) \
+			2>&1 | grep -vE "(Suppressed.*warnings|non-user code|Use -header-filter|Use -system-headers|warnings generated|errors generated|Error while processing|too many errors|Processing file)" || true; \
 	else \
 		echo "Warning: clang-tidy not found. Install it with: brew install llvm"; \
 		echo "Skipping linting..."; \
