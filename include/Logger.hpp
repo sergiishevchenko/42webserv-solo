@@ -5,12 +5,7 @@
 #include <string>
 #include <sstream>
 
-enum LogLevel {
-    LOG_DEBUG = 0,
-    LOG_INFO = 1,
-    LOG_WARNING = 2,
-    LOG_ERROR = 3
-};
+enum LogLevel { LOG_DEBUG = 0, LOG_INFO = 1, LOG_WARNING = 2, LOG_ERROR = 3 };
 
 class Logger {
    public:
@@ -44,4 +39,3 @@ class Logger {
 #define LOG_ERROR() Logger::getInstance().error()
 
 #endif
-

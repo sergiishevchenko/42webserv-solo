@@ -2,7 +2,9 @@
 #include <ctime>
 #include <iomanip>
 
-Logger::Logger() : currentLevel_(LOG_INFO), outputStream_(&std::cout), errorStream_(&std::cerr) {}
+Logger::Logger()
+    : currentLevel_(LOG_INFO), outputStream_(&std::cout),
+      errorStream_(&std::cerr) {}
 
 Logger::~Logger() {}
 
@@ -11,13 +13,9 @@ Logger& Logger::getInstance() {
     return instance;
 }
 
-void Logger::setLogLevel(LogLevel level) {
-    currentLevel_ = level;
-}
+void Logger::setLogLevel(LogLevel level) { currentLevel_ = level; }
 
-LogLevel Logger::getLogLevel() const {
-    return currentLevel_;
-}
+LogLevel Logger::getLogLevel() const { return currentLevel_; }
 
 std::string Logger::getLevelString(LogLevel level) const {
     switch (level) {
@@ -40,7 +38,8 @@ std::ostream& Logger::log(LogLevel level, const std::string& prefix) {
         return nullStream;
     }
 
-    std::ostream& stream = (level >= LOG_ERROR) ? *errorStream_ : *outputStream_;
+    std::ostream& stream =
+        (level >= LOG_ERROR) ? *errorStream_ : *outputStream_;
 
     time_t now = time(0);
     struct tm* timeinfo = localtime(&now);
@@ -71,4 +70,3 @@ std::ostream& Logger::warning(const std::string& prefix) {
 std::ostream& Logger::error(const std::string& prefix) {
     return log(LOG_ERROR, prefix);
 }
-

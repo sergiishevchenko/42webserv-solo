@@ -29,8 +29,7 @@ int main(int argc, char** argv) {
 
     LOG_INFO() << "webserv: Configuration loaded successfully" << std::endl;
     const std::vector<ServerConfig>& servers = config.getServers();
-    LOG_INFO() << "Found " << servers.size() << " server block(s)"
-               << std::endl;
+    LOG_INFO() << "Found " << servers.size() << " server block(s)" << std::endl;
 
     for (size_t i = 0; i < servers.size(); ++i) {
         const ServerConfig& s = servers[i];
@@ -46,8 +45,7 @@ int main(int argc, char** argv) {
         oss << "\n";
         oss << "Root: " << s.root << "\n";
         oss << "Index: " << s.index << "\n";
-        oss << "Client max body size: " << s.client_max_body_size
-            << " bytes\n";
+        oss << "Client max body size: " << s.client_max_body_size << " bytes\n";
         if (!s.error_pages.empty()) {
             oss << "Error pages: ";
             for (std::map<int, std::string>::const_iterator it =
