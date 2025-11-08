@@ -18,7 +18,7 @@ OBJ_DIR		:= obj
 INC_DIR		:= include
 
 SRCS		:= $(SRC_DIR)/main.cpp \
-			   $(SRC_DIR)/Config.cpp \
+			   $(SRC_DIR)/ConfigParser.cpp \
 			   $(SRC_DIR)/Logger.cpp
 OBJS		:= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 

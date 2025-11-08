@@ -27,7 +27,7 @@ make format
 Format specific files manually:
 ```bash
 clang-format -i src/main.cpp
-clang-format -i include/Config.hpp
+clang-format -i include/ConfigParser.hpp
 ```
 
 ### Lint code

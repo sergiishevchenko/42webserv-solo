@@ -1,6 +1,6 @@
 #include <string>
 #include <sstream>
-#include "Config.hpp"
+#include "ConfigParser.hpp"
 #include "Logger.hpp"
 
 static void printUsage(const char* progName) {
@@ -15,20 +15,20 @@ int main(int argc, char** argv) {
     }
 
     const std::string configPath = argv[1];
-    Config config;
+    ConfigParser parser;
 
-    if (!config.loadFromFile(configPath)) {
-        LOG_ERROR() << config.getLastError() << std::endl;
+    if (!parser.loadFromFile(configPath)) {
+        LOG_ERROR() << parser.getLastError() << std::endl;
         return 1;
     }
 
-    if (!config.validate()) {
-        LOG_ERROR() << config.getLastError() << std::endl;
+    if (!parser.validate()) {
+        LOG_ERROR() << parser.getLastError() << std::endl;
         return 1;
     }
 
     LOG_INFO() << "webserv: Configuration loaded successfully" << std::endl;
-    const std::vector<ServerConfig>& servers = config.getServers();
+    const std::vector<ServerConfig>& servers = parser.getServers();
     LOG_INFO() << "Found " << servers.size() << " server block(s)" << std::endl;
 
     for (size_t i = 0; i < servers.size(); ++i) {

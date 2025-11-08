@@ -1,4 +1,4 @@
-# Examples of Config.hpp Data Structures Usage
+# Examples of ConfigParser.hpp Data Structures Usage
 
 ## 1. `std::set<std::string> methods`
 
@@ -161,7 +161,7 @@ const std::vector<ServerConfig>& getServers() const { return servers_; }
 **Breakdown:**
 - `const std::vector<ServerConfig>&` - returns const reference (not a copy!)
 - `getServers()` - method name
-- `const` - method does not modify the Config object
+- `const` - method does not modify the ConfigParser object
 - `return servers_;` - returns reference to private field
 
 **Advantages:**
@@ -171,11 +171,11 @@ const std::vector<ServerConfig>& getServers() const { return servers_; }
 
 **Usage:**
 ```cpp
-Config config;
-config.loadFromFile("config.conf");
+ConfigParser parser;
+parser.loadFromFile("config.conf");
 
 // Get reference (not a copy!)
-const std::vector<ServerConfig>& servers = config.getServers();
+const std::vector<ServerConfig>& servers = parser.getServers();
 
 // Read data
 std::cout << "Number of servers: " << servers.size() << std::endl;

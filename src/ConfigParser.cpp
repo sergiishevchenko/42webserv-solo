@@ -1,4 +1,4 @@
-#include "Config.hpp"
+#include "ConfigParser.hpp"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -6,11 +6,11 @@
 #include <cstdlib>
 #include <iostream>
 
-Config::Config() : lastError_("") {}
+ConfigParser::ConfigParser() : lastError_("") {}
 
-Config::~Config() {}
+ConfigParser::~ConfigParser() {}
 
-std::string Config::trim(const std::string& str) {
+std::string ConfigParser::trim(const std::string& str) {
     size_t first = str.find_first_not_of(" \t\n\r");
     if (first == std::string::npos)
         return "";
@@ -18,7 +18,7 @@ std::string Config::trim(const std::string& str) {
     return str.substr(first, (last - first + 1));
 }
 
-std::vector<std::string> Config::split(const std::string& str, char delim) {
+std::vector<std::string> ConfigParser::split(const std::string& str, char delim) {
     std::vector<std::string> tokens;
     std::stringstream ss(str);
     std::string token;
@@ -31,7 +31,7 @@ std::vector<std::string> Config::split(const std::string& str, char delim) {
     return tokens;
 }
 
-bool Config::isNumber(const std::string& str) {
+bool ConfigParser::isNumber(const std::string& str) {
     if (str.empty())
         return false;
     for (size_t i = 0; i < str.length(); ++i) {
@@ -41,7 +41,7 @@ bool Config::isNumber(const std::string& str) {
     return true;
 }
 
-bool Config::parseListen(const std::string& line, ServerConfig& server) {
+bool ConfigParser::parseListen(const std::string& line, ServerConfig& server) {
     std::string trimmed = trim(line);
     if (trimmed.find("listen") != 0) {
         lastError_ = "Parse error: Invalid 'listen' directive: " + line;
@@ -84,7 +84,7 @@ bool Config::parseListen(const std::string& line, ServerConfig& server) {
     return false;
 }
 
-bool Config::parseDirective(const std::string& line, ServerConfig& server) {
+bool ConfigParser::parseDirective(const std::string& line, ServerConfig& server) {
     std::string trimmed = trim(line);
 
     size_t commentPos = trimmed.find('#');
@@ -138,7 +138,7 @@ bool Config::parseDirective(const std::string& line, ServerConfig& server) {
     return false;
 }
 
-bool Config::parseLocationDirective(const std::string& line,
+bool ConfigParser::parseLocationDirective(const std::string& line,
                                     Location& location) {
     std::string trimmed = trim(line);
 
@@ -189,7 +189,7 @@ bool Config::parseLocationDirective(const std::string& line,
     return false;
 }
 
-bool Config::parseLocationBlock(std::istream& in, Location& location) {
+bool ConfigParser::parseLocationBlock(std::istream& in, Location& location) {
     std::string line;
     int braceCount = 1;
 
@@ -210,7 +210,7 @@ bool Config::parseLocationBlock(std::istream& in, Location& location) {
     return braceCount == 0;
 }
 
-bool Config::parseServerBlock(std::istream& in, ServerConfig& server) {
+bool ConfigParser::parseServerBlock(std::istream& in, ServerConfig& server) {
     std::string line;
     int braceCount = 1;
 
@@ -260,7 +260,7 @@ bool Config::parseServerBlock(std::istream& in, ServerConfig& server) {
     return braceCount == 0;
 }
 
-bool Config::loadFromFile(const std::string& filepath) {
+bool ConfigParser::loadFromFile(const std::string& filepath) {
     lastError_.clear();
     std::ifstream file(filepath.c_str());
     if (!file.is_open()) {
@@ -288,7 +288,7 @@ bool Config::loadFromFile(const std::string& filepath) {
     return true;
 }
 
-bool Config::validate() const {
+bool ConfigParser::validate() const {
     lastError_.clear();
 
     if (servers_.empty()) {
@@ -355,3 +355,4 @@ bool Config::validate() const {
 
     return true;
 }
+

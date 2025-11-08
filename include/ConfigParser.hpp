@@ -1,5 +1,5 @@
-#ifndef CONFIG_HPP
-#define CONFIG_HPP
+#ifndef CONFIG_PARSER_HPP
+#define CONFIG_PARSER_HPP
 
 #include <string>
 #include <vector>
@@ -30,10 +30,10 @@ struct ServerConfig {
     ServerConfig() : client_max_body_size(1048576) {}
 };
 
-class Config {
+class ConfigParser {
    public:
-    Config();
-    ~Config();
+    ConfigParser();
+    ~ConfigParser();
 
     bool loadFromFile(const std::string& filepath);
     std::string getLastError() const { return lastError_; }
@@ -58,3 +58,4 @@ class Config {
 };
 
 #endif
+
