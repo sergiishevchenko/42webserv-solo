@@ -58,4 +58,3 @@ class ConfigParser {
 };
 
 #endif
-

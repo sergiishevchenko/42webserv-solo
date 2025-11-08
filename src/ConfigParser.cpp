@@ -355,4 +355,3 @@ bool ConfigParser::validate() const {
 
     return true;
 }
-
