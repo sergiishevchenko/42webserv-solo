@@ -195,53 +195,346 @@ server {
 
 ---
 
+### Socket
+
+Manages a network socket for listening or client connections. Handles socket creation, binding, listening, and accepting connections. Supports non-blocking mode and close-on-exec flag.
+
+**Definition:**
+```cpp
+class Socket {
+   public:
+    Socket();
+    ~Socket();
+
+    bool bind(const std::string& host, int port);
+    bool listen(int backlog = 128);
+    int accept();
+    void close();
+    bool setNonBlocking();
+    bool setCloseOnExec();
+
+    int getFd() const;
+    bool isValid() const;
+    std::string getHost() const;
+    int getPort() const;
+
+   private:
+    int fd_;
+    std::string host_;
+    int port_;
+};
+```
+
+**Public Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `Socket()` | - | Default constructor. Initializes socket with invalid file descriptor. |
+| `~Socket()` | - | Destructor. Closes the socket if it's still open. |
+| `bind(const std::string& host, int port)` | `bool` | Creates a socket, sets it to non-blocking mode, and binds it to the specified host and port. Returns `true` on success. |
+| `listen(int backlog)` | `bool` | Starts listening for incoming connections. `backlog` specifies the maximum length of the queue of pending connections (default: 128). |
+| `accept()` | `int` | Accepts a new connection. Returns the file descriptor of the new client socket, or -1 on error. |
+| `close()` | `void` | Closes the socket and marks it as invalid. |
+| `setNonBlocking()` | `bool` | Sets the socket to non-blocking mode using `fcntl(F_SETFL, O_NONBLOCK)`. Returns `true` on success. |
+| `setCloseOnExec()` | `bool` | Sets the close-on-exec flag using `fcntl(F_SETFD, FD_CLOEXEC)`. Returns `true` on success. |
+| `getFd() const` | `int` | Returns the file descriptor of the socket. |
+| `isValid() const` | `bool` | Returns `true` if the socket is valid (fd >= 0). |
+| `getHost() const` | `std::string` | Returns the host address the socket is bound to. |
+| `getPort() const` | `int` | Returns the port number the socket is bound to. |
+
+**Features:**
+- Automatic socket creation and configuration
+- Non-blocking mode support
+- Close-on-exec flag for security
+- SO_REUSEADDR socket option to allow address reuse
+- Support for both specific interfaces (e.g., "127.0.0.1") and any interface ("0.0.0.0")
+
+**Usage Example:**
+```cpp
+Socket socket;
+
+if (!socket.bind("127.0.0.1", 8080)) {
+    std::cerr << "Failed to bind socket" << std::endl;
+    return 1;
+}
+
+if (!socket.listen(128)) {
+    std::cerr << "Failed to listen" << std::endl;
+    return 1;
+}
+
+int client_fd = socket.accept();
+if (client_fd >= 0) {
+    // ...
+    ::close(client_fd);
+}
+
+socket.close();
+```
+
+**Error Handling:**
+- `bind()` returns `false` if socket creation, binding, or configuration fails
+- `listen()` returns `false` if the socket cannot start listening
+- `accept()` returns -1 on error (check `errno` for details)
+- Errors are logged using the Logger system
+
+---
+
+### Connection
+
+Manages a client connection. Tracks the client's file descriptor, IP address, and last activity time for timeout handling.
+
+**Definition:**
+```cpp
+class Connection {
+   public:
+    Connection(int fd, const std::string& client_ip);
+    ~Connection();
+
+    int getFd() const;
+    std::string getClientIp() const;
+    time_t getLastActivity() const;
+    void updateActivity();
+
+    void close();
+    bool isValid() const;
+
+   private:
+    int fd_;
+    std::string client_ip_;
+    time_t last_activity_;
+};
+```
+
+**Public Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `Connection(int fd, const std::string& client_ip)` | - | Constructor. Creates a connection with the given file descriptor and client IP address. Initializes `last_activity_` to current time. |
+| `~Connection()` | - | Destructor. Closes the connection if it's still open. |
+| `getFd() const` | `int` | Returns the file descriptor of the client socket. |
+| `getClientIp() const` | `std::string` | Returns the IP address of the client. |
+| `getLastActivity() const` | `time_t` | Returns the timestamp of the last activity on this connection. |
+| `updateActivity()` | `void` | Updates the last activity timestamp to the current time. |
+| `close()` | `void` | Closes the connection by closing the file descriptor. |
+| `isValid() const` | `bool` | Returns `true` if the connection is valid (fd >= 0). |
+
+**Features:**
+- Automatic activity tracking for timeout handling
+- Client IP address storage for logging and debugging
+- Automatic cleanup on destruction
+
+**Usage Example:**
+```cpp
+int client_fd = socket.accept();
+if (client_fd >= 0) {
+    std::string client_ip = "127.0.0.1";
+    Connection conn(client_fd, client_ip);
+    
+    conn.updateActivity();
+    
+    if (conn.isValid()) {
+        // ...
+    }
+    
+    // Connection is automatically closed when it goes out of scope
+}
+```
+
+**Timeout Handling:**
+- The `last_activity_` field is used to track when the connection was last active
+- The Server class uses this to implement connection timeouts
+- Call `updateActivity()` whenever data is sent or received on the connection
+
+---
+
+### Server
+
+Main server class that implements the HTTP server with non-blocking I/O using `poll()`. Manages multiple listening sockets, client connections, and handles events in an event loop.
+
+**Definition:**
+```cpp
+class Server {
+   public:
+    Server();
+    ~Server();
+
+    bool init(const ConfigParser& config);
+    void run();
+    void stop();
+
+   private:
+    std::vector<Socket*> listening_sockets_;
+    std::map<int, Connection*> connections_;
+    std::vector<struct pollfd> poll_fds_;
+    bool running_;
+    time_t connection_timeout_;
+
+    void setupPollFds();
+    void handlePollEvents();
+    void acceptNewConnection(Socket* socket);
+    void handleClientRead(int fd);
+    void handleClientWrite(int fd);
+    void closeConnection(int fd);
+    void cleanupTimedOutConnections();
+    void addPollFd(int fd, short events);
+    void removePollFd(int fd);
+    void updatePollFd(int fd, short events);
+};
+```
+
+**Public Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `Server()` | - | Constructor. Initializes the server with default settings. |
+| `~Server()` | - | Destructor. Stops the server and cleans up all connections and sockets. |
+| `init(const ConfigParser& config)` | `bool` | Initializes the server by creating listening sockets for all server blocks in the configuration. Returns `true` on success. |
+| `run()` | `void` | Starts the event loop. Blocks until `stop()` is called. Handles incoming connections and client I/O events. |
+| `stop()` | `void` | Stops the server, closes all connections, and cleans up resources. |
+
+**Private Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `setupPollFds()` | `void` | Rebuilds the `poll_fds_` vector from all listening sockets and active connections. |
+| `handlePollEvents()` | `void` | Processes events from `poll()`. Handles new connections, client reads, and client writes. |
+| `acceptNewConnection(Socket* socket)` | `void` | Accepts a new connection from a listening socket and adds it to the connections map. |
+| `handleClientRead(int fd)` | `void` | Handles read events from a client connection. Currently sends a simple "Hello, World!" response. |
+| `handleClientWrite(int fd)` | `void` | Handles write events from a client connection. Updates activity timestamp. |
+| `closeConnection(int fd)` | `void` | Closes a client connection and removes it from the connections map and poll_fds. |
+| `cleanupTimedOutConnections()` | `void` | Closes connections that have been idle for longer than `connection_timeout_` seconds. |
+| `addPollFd(int fd, short events)` | `void` | Adds a file descriptor to the poll_fds vector. |
+| `removePollFd(int fd)` | `void` | Removes a file descriptor from the poll_fds vector. |
+| `updatePollFd(int fd, short events)` | `void` | Updates the events mask for a file descriptor in poll_fds. |
+
+**Features:**
+- Non-blocking I/O using `poll()` system call
+- Multiple listening sockets (multiple ports/interfaces)
+- Connection management with activity tracking
+- Automatic timeout handling for idle connections
+- Event-driven architecture
+- Graceful shutdown support
+
+**Internal Data Structures:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `listening_sockets_` | `std::vector<Socket*>` | List of listening sockets (one per interface:port combination) |
+| `connections_` | `std::map<int, Connection*>` | Map of active client connections (fd -> Connection*) |
+| `poll_fds_` | `std::vector<struct pollfd>` | File descriptors for `poll()` system call |
+| `running_` | `bool` | Flag indicating if the server is running |
+| `connection_timeout_` | `time_t` | Timeout in seconds for idle connections (default: 60) |
+
+**Usage Example:**
+```cpp
+ConfigParser parser;
+if (!parser.loadFromFile("config/server.conf")) {
+    std::cerr << "Error: " << parser.getLastError() << std::endl;
+    return 1;
+}
+
+if (!parser.validate()) {
+    std::cerr << "Validation error: " << parser.getLastError() << std::endl;
+    return 1;
+}
+
+Server server;
+if (!server.init(parser)) {
+    std::cerr << "Failed to initialize server" << std::endl;
+    return 1;
+}
+
+server.run();
+```
+
+**Event Loop:**
+1. `setupPollFds()` builds the poll_fds vector from all listening sockets and connections
+2. `poll()` waits for events on all file descriptors
+3. `handlePollEvents()` processes events:
+   - `POLLIN` on listening socket → `acceptNewConnection()`
+   - `POLLIN` on client socket → `handleClientRead()`
+   - `POLLOUT` on client socket → `handleClientWrite()`
+   - `POLLERR` or `POLLHUP` → `closeConnection()`
+4. `cleanupTimedOutConnections()` removes idle connections
+5. Loop repeats until `running_` is set to `false`
+
+**Error Handling:**
+- `init()` returns `false` if no listening sockets could be created
+- Connection errors are logged and connections are closed automatically
+- Timeout errors result in automatic connection cleanup
+- The server continues running even if individual connections fail
+
+**Platform Support:**
+- Uses `poll()` system call (available on both Linux and macOS)
+- Non-blocking sockets work on all POSIX-compliant systems
+- Connection timeout handling is portable
+
+---
+
 ## Data Structures Reference
 
-### std::set<std::string> methods
+### struct pollfd
 
-Stores allowed HTTP methods for a location. Automatically sorts and removes duplicates.
+Used by the `poll()` system call to monitor file descriptors for events. Part of the Server class implementation.
 
-**Example:**
-```cpp
-std::set<std::string> methods;
-methods.insert("GET");
-methods.insert("POST");
-methods.insert("DELETE");
-// Result: {"DELETE", "GET", "POST"} (sorted)
+**Definition:**
+```c
+struct pollfd {
+    int fd;        // File descriptor to monitor
+    short events;  // Events to monitor (POLLIN, POLLOUT, etc.)
+    short revents; // Events that occurred (set by poll())
+};
 ```
 
-### std::map<std::string, std::string> cgi_pass
-
-Maps file extensions to CGI program paths.
+**Events:**
+- `POLLIN` - Data is available for reading
+- `POLLOUT` - Data can be written without blocking
+- `POLLERR` - Error condition
+- `POLLHUP` - Hang up (connection closed)
 
 **Example:**
 ```cpp
-std::map<std::string, std::string> cgi_pass;
-cgi_pass[".py"] = "/usr/bin/python";
-cgi_pass[".php"] = "/usr/bin/php";
+struct pollfd pfd;
+pfd.fd = socket_fd;
+pfd.events = POLLIN | POLLOUT;
+pfd.revents = 0;
+
+int result = poll(&pfd, 1, 1000);
+if (result > 0) {
+    if (pfd.revents & POLLIN) {
+        // Data available for reading
+    }
+    if (pfd.revents & POLLOUT) {
+        // Ready for writing
+    }
+}
 ```
 
-### std::vector<std::pair<std::string, int> > listen
+### std::map<int, Connection*> connections_
 
-Stores listening interface:port pairs.
+Maps file descriptors to Connection objects in the Server class.
 
 **Example:**
 ```cpp
-std::vector<std::pair<std::string, int> > listen;
-listen.push_back(std::make_pair("127.0.0.1", 8080));
-listen.push_back(std::make_pair("0.0.0.0", 8080));
-// Access: listen[0].first = "127.0.0.1", listen[0].second = 8080
+std::map<int, Connection*> connections_;
+Connection* conn = new Connection(client_fd, "127.0.0.1");
+connections_[client_fd] = conn;
+
+Connection* conn = connections_[client_fd];
 ```
 
-### std::map<int, std::string> error_pages
+### std::vector<Socket*> listening_sockets_
 
-Maps HTTP error codes to custom error page paths.
+Stores listening sockets in the Server class.
 
 **Example:**
 ```cpp
-std::map<int, std::string> error_pages;
-error_pages[404] = "/errors/404.html";
-error_pages[500] = "/errors/500.html";
+std::vector<Socket*> listening_sockets_;
+Socket* socket = new Socket();
+socket->bind("127.0.0.1", 8080);
+socket->listen();
+listening_sockets_.push_back(socket);
 ```
 
 ---
@@ -254,9 +547,6 @@ error_pages[500] = "/errors/500.html";
 - Configuration files support comments starting with `#`
 - Directives must end with `;` (semicolon)
 - Block structures use `{` and `}` braces
-
----
-
-## Future Additions
-
-This document will be updated as new structures and classes are added to the project.
+- All sockets are created in non-blocking mode
+- Connections are automatically tracked for timeout handling
+- The server uses `poll()` for event-driven I/O (compatible with Linux and macOS)
