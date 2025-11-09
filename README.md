@@ -37,4 +37,20 @@ Run configuration parser tests:
 ./test_config.sh
 ```
 
-For more details, see [TESTING.md](TEST_CONFIG.md)
+Test the server:
+```bash
+# Start the server
+./webserv config/test_valid.conf
+
+# In another terminal, send a test request
+curl http://127.0.0.1:8080/
+```
+
+For comprehensive testing instructions, see [TESTING.md](docs/TESTING.md)
+
+## Documentation
+
+- [STRUCTURES.md](docs/STRUCTURES.md) - Structures and classes reference
+- [TESTING.md](docs/TESTING.md) - Testing guide
+- [FORMATTING.md](docs/FORMATTING.md) - Code formatting guidelines
+- [PARAMETER_PASSING.md](docs/PARAMETER_PASSING.md) - Parameter passing documentation
