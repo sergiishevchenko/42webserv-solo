@@ -14,13 +14,13 @@ Represents a location block in the server configuration. Defines how requests to
 ```cpp
 struct Location {
     std::string path;                                    // URL path pattern
-    std::set<std::string> methods;                      // Allowed HTTP methods
+    std::set<std::string> methods;                       // Allowed HTTP methods
     std::string root;                                    // Root directory for this location
     std::string index;                                   // Default index file
     bool autoindex;                                      // Enable directory listing
     std::string redirect;                                // Redirect URL
-    std::string upload_store;                           // Upload directory path
-    std::map<std::string, std::string> cgi_pass;       // CGI handler mappings (extension -> program)
+    std::string upload_store;                            // Upload directory path
+    std::map<std::string, std::string> cgi_pass;         // CGI handler mappings (extension -> program)
 
     Location() : autoindex(false) {}
 };
@@ -58,14 +58,14 @@ Represents a server block in the configuration. Defines server settings, listeni
 **Definition:**
 ```cpp
 struct ServerConfig {
-    std::vector<std::pair<std::string, int> > listen;  // Listening interfaces and ports
+    std::vector<std::pair<std::string, int> > listen;   // Listening interfaces and ports
     std::string root;                                   // Root directory for the server
     std::string index;                                  // Default index file
     size_t client_max_body_size;                        // Maximum request body size (bytes)
     std::map<int, std::string> error_pages;             // Custom error page mappings
     std::vector<Location> locations;                    // Location blocks
 
-    ServerConfig() : client_max_body_size(1048576) {}  // Default: 1 MB
+    ServerConfig() : client_max_body_size(1048576) {}   // Default: 1 MB
 };
 ```
 
@@ -260,4 +260,3 @@ error_pages[500] = "/errors/500.html";
 ## Future Additions
 
 This document will be updated as new structures and classes are added to the project.
-
