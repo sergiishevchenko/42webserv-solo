@@ -118,7 +118,7 @@ macos:
 
 format:
 	@echo "$(CYAN)┌──────────────────────────────────────────┐$(RESET)"
-	@echo "$(CYAN)│$(RESET)  $(CYAN)$(BOLD)Formatting source files...$(RESET)            $(CYAN)│$(RESET)"
+	@echo "$(CYAN)│$(RESET)  $(CYAN)$(BOLD)Formatting source files...$(RESET)              $(CYAN)│$(RESET)"
 	@echo "$(CYAN)└──────────────────────────────────────────┘$(RESET)"
 	@if command -v clang-format >/dev/null 2>&1; then \
 		echo "$(ARROW) $(CYAN)Running clang-format...$(RESET)"; \
