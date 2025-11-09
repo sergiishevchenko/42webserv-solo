@@ -38,30 +38,30 @@ std::string Logger::getLevelString(LogLevel level) const {
 std::string Logger::getLevelColor(LogLevel level) const {
     switch (level) {
         case LOG_DEBUG:
-            return "\033[36m";  // Cyan
+            return "\033[36m"; // Cyan
         case LOG_INFO:
-            return "\033[32m";  // Green
+            return "\033[32m"; // Green
         case LOG_WARNING:
-            return "\033[33m";  // Yellow
+            return "\033[33m"; // Yellow
         case LOG_ERROR:
-            return "\033[31m";  // Red
+            return "\033[31m"; // Red
         default:
-            return "\033[0m";   // Reset
+            return "\033[0m"; // Reset
     }
 }
 
 std::string Logger::getTextColor(LogLevel level) const {
     switch (level) {
         case LOG_DEBUG:
-            return "\033[0;96m";  // Bright Cyan
+            return "\033[0;96m"; // Bright Cyan
         case LOG_INFO:
-            return "\033[0;94m";  // Bright Blue
+            return "\033[0;94m"; // Bright Blue
         case LOG_WARNING:
-            return "\033[0;93m";  // Bright Yellow
+            return "\033[0;93m"; // Bright Yellow
         case LOG_ERROR:
-            return "\033[0;91m";  // Bright Red
+            return "\033[0;91m"; // Bright Red
         default:
-            return "\033[0m";      // Reset
+            return "\033[0m"; // Reset
     }
 }
 
@@ -102,7 +102,8 @@ std::ostream& Logger::log(LogLevel level, const std::string& prefix) {
 
     if (useColors) {
         stream << "\033[90m[" << buffer << "]\033[0m ";
-        stream << getLevelColor(level) << "[" << getLevelString(level) << "]\033[0m";
+        stream << getLevelColor(level) << "[" << getLevelString(level)
+               << "]\033[0m";
     } else {
         stream << "[" << buffer << "] [" << getLevelString(level) << "]";
     }
