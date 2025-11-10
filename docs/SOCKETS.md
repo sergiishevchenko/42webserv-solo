@@ -68,9 +68,109 @@ SERVER                          CLIENT
 ### What is a Socket at System Level?
 
 1. **File Descriptor (fd):**
-   - In Unix/Linux, a socket is represented as a file descriptor (a number, e.g., 3, 4, 5)
+
+   **What it is:**
+   - In Unix/Linux, a socket is represented as a file descriptor — an integer (e.g., 3, 4, 5)
    - File descriptor is a "handle" for accessing an operating system resource
-   - Using this number, you can read and write data
+   - This is an identifier that the OS kernel returns to the program when creating a resource
+
+   **What "identifier returned by the OS kernel" means:**
+
+   When you call a system call (e.g., `socket()`, `open()`, `pipe()`), the following happens:
+
+   1. **Your program** calls a function (e.g., `socket()`)
+   2. **The function makes a system call** — switches to kernel mode
+   3. **The OS kernel** creates an internal data structure for the resource in its memory:
+      - For socket: creates a structure with buffers, state, address, etc.
+      - For file: creates a structure with file information, read position, etc.
+   4. **The kernel allocates a number** (identifier) from the process's file descriptor table
+   5. **The kernel links the number to the resource** — writes a pointer to the created structure in the process table
+   6. **The kernel returns the number to the program** — the function returns this number (e.g., 3)
+
+   **Why this is important:**
+
+   - **Separation of concerns**: The resource lives in kernel memory (protected area), while the program only gets a "ticket number"
+   - **Security**: The program cannot directly access kernel structures, only through system calls
+   - **Management**: The kernel controls all resources and can check access rights
+   - **Abstraction**: The program doesn't need to know implementation details, just the number
+
+   **Analogy:**
+
+   Think of a bank safe deposit box:
+   - You ask the bank (kernel) to create a box (resource)
+   - The bank creates a box in the vault (kernel memory)
+   - The bank gives you a box number (file descriptor, e.g., 3)
+   - You cannot enter the vault directly, but you can use the number for operations
+   - When you say "open box 3", the bank knows which box to open
+
+   **In code it looks like this:**
+
+   ```cpp
+   // Program calls socket()
+   int fd = socket(AF_INET, SOCK_STREAM, 0);
+   
+   // What happens inside:
+   // 1. socket() → system call to kernel
+   // 2. Kernel creates socket structure in its memory
+   // 3. Kernel finds free slot in process descriptor table (e.g., index 3)
+   // 4. Kernel writes: table[3] = pointer_to_socket_structure
+   // 5. socket() returns 3
+   // 6. Now fd = 3, and this number is the only link between program and resource
+   
+   // All subsequent operations use this number:
+   bind(fd, ...);    // Kernel: "find resource by number 3 and execute bind"
+   listen(fd, ...);   // Kernel: "find resource by number 3 and execute listen"
+   close(fd);         // Kernel: "find resource by number 3 and delete it"
+   ```
+
+   **Unix Philosophy: "Everything is a file":**
+   - In Unix/Linux, many resources are represented as files or file descriptors:
+     - Regular files on disk
+     - Directories
+     - Devices (printers, disks)
+     - Sockets (network connections)
+     - Pipes
+   - This allows using the same system calls (`read`, `write`, `close`) for working with different resources
+
+   **How it works inside a process:**
+
+   ```
+   Process has a file descriptor table:
+   
+   Index | Resource
+   ------|------------------
+   0     | stdin (standard input)
+   1     | stdout (standard output)
+   2     | stderr (standard error)
+   3     | Socket (created by socket())
+   4     | Regular file (opened by open())
+   5     | Another socket (accepted by accept())
+   ...
+   ```
+
+   **What happens when creating a socket:**
+
+   ```cpp
+   int fd = socket(AF_INET, SOCK_STREAM, 0);
+   // 1. Program calls socket()
+   // 2. OS kernel creates internal data structure for socket in kernel memory
+   // 3. Kernel allocates free file descriptor (e.g., 3)
+   // 4. Kernel links this descriptor to the created socket
+   // 5. Kernel returns number 3 to program
+   // 6. Now fd = 3 - this is the "handle" for working with this socket
+   ```
+
+   **Internal structure in kernel:**
+
+   When you create a socket, the OS kernel creates an internal data structure that contains:
+   - Socket type (TCP, UDP)
+   - Connection state
+   - Buffers for incoming and outgoing data
+   - Address and port (after bind())
+   - Flags (non-blocking, close-on-exec, etc.)
+   - Reference to linked socket (for TCP)
+
+   A file descriptor is simply an index in the process table that points to this internal structure in the kernel.
 
 2. **sockaddr_in Structure:**
    - Stores address and port (IP + port)
