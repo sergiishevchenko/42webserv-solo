@@ -134,19 +134,26 @@ SERVER                          CLIENT
 
    **How it works inside a process:**
 
+   Every process in Unix/Linux has a file descriptor table. The first three descriptors (0, 1, 2) **are always present** in every process and are created automatically when the process starts:
+
    ```
    Process has a file descriptor table:
    
    Index | Resource
    ------|------------------
-   0     | stdin (standard input)
-   1     | stdout (standard output)
-   2     | stderr (standard error)
-   3     | Socket (created by socket())
-   4     | Regular file (opened by open())
-   5     | Another socket (accepted by accept())
+   0     | stdin (standard input)      ← ALWAYS present in every process
+   1     | stdout (standard output)    ← ALWAYS present in every process
+   2     | stderr (standard error)     ← ALWAYS present in every process
+   3     | Socket (created by socket())  ← Example: created by program
+   4     | Regular file (opened by open()) ← Example: created by program
+   5     | Another socket (accepted by accept()) ← Example: created by program
    ...
    ```
+
+   **Important:**
+   - Descriptors **0, 1, 2** are **standard descriptors** that **every process** has by default
+   - Descriptors **3, 4, 5 and beyond** are examples of additional descriptors created by the program when calling `socket()`, `open()`, `accept()`, etc.
+   - When you create a new resource, the OS finds the first free slot in the table (usually starting from 3, since 0-2 are already occupied)
 
    **What happens when creating a socket:**
 
