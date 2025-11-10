@@ -655,6 +655,213 @@ listening_sockets_.push_back(socket);
 
 ---
 
+## System Socket Structures
+
+These are structures provided by the operating system for socket programming. They are defined in system headers (`<sys/socket.h>`, `<netinet/in.h>`, `<arpa/inet.h>`).
+
+### struct sockaddr_in
+
+Represents an IPv4 socket address (IP address + port). Used with `bind()`, `connect()`, `accept()`, and other socket functions.
+
+**Definition:**
+```c
+#include <netinet/in.h>
+
+struct sockaddr_in {
+    short            sin_family;   // Address family (AF_INET for IPv4)
+    unsigned short   sin_port;     // Port number (in network byte order)
+    struct in_addr   sin_addr;     // IP address (in network byte order)
+    char             sin_zero[8];  // Padding (unused, should be zero)
+};
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sin_family` | `short` | Address family. Always `AF_INET` for IPv4 sockets. |
+| `sin_port` | `unsigned short` | Port number in **network byte order** (use `htons()` to convert from host byte order). |
+| `sin_addr` | `struct in_addr` | IP address structure (see below). Contains the IP address in **network byte order**. |
+| `sin_zero[8]` | `char[8]` | Padding bytes. Should be set to zero. Not used. |
+
+**Important Notes:**
+
+1. **Byte Order**: Port and IP address must be in **network byte order** (big-endian). Use:
+   - `htons()` - host to network short (for port)
+   - `htonl()` - host to network long (for IP address)
+   - `ntohs()` - network to host short (when reading port)
+   - `ntohl()` - network to host long (when reading IP)
+
+2. **IP Address Values:**
+   - `INADDR_ANY` (0.0.0.0) - Listen on all interfaces
+   - `INADDR_LOOPBACK` (127.0.0.1) - Localhost only
+   - Specific IP address - Use `inet_addr()` or `inet_aton()`
+
+**Usage Example:**
+```c
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+struct sockaddr_in addr;
+
+// Initialize structure
+memset(&addr, 0, sizeof(addr));  // Zero out the structure
+addr.sin_family = AF_INET;
+addr.sin_port = htons(8080);                    // Convert port to network byte order
+addr.sin_addr.s_addr = INADDR_ANY;              // Listen on all interfaces (0.0.0.0)
+
+// Or bind to specific IP:
+inet_aton("127.0.0.1", &addr.sin_addr);        // Set to localhost
+// Or:
+addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Alternative method
+
+// Use with bind()
+bind(socket_fd, (struct sockaddr*)&addr, sizeof(addr));
+```
+
+**Common Patterns:**
+
+```c
+// Bind to all interfaces (0.0.0.0)
+addr.sin_addr.s_addr = INADDR_ANY;
+
+// Bind to localhost only
+addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+// Bind to specific IP
+addr.sin_addr.s_addr = inet_addr("192.168.1.100");
+
+// Get IP address as string (when reading from socket)
+char ip_str[INET_ADDRSTRLEN];
+inet_ntop(AF_INET, &addr.sin_addr, ip_str, INET_ADDRSTRLEN);
+printf("IP: %s\n", ip_str);
+
+// Get port (convert from network to host byte order)
+int port = ntohs(addr.sin_port);
+printf("Port: %d\n", port);
+```
+
+---
+
+### struct in_addr
+
+Represents an IPv4 address. Used as a field in `struct sockaddr_in`.
+
+**Definition:**
+```c
+#include <netinet/in.h>
+
+struct in_addr {
+    unsigned long s_addr;  // IP address in network byte order (32-bit)
+};
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `s_addr` | `unsigned long` | 32-bit IPv4 address in **network byte order**. Use `htonl()` or `inet_addr()` to set it. |
+
+**Usage Example:**
+```c
+struct in_addr addr;
+
+// Set IP address
+addr.s_addr = inet_addr("127.0.0.1");        // Returns network byte order
+// Or:
+inet_aton("127.0.0.1", &addr);                // Alternative method
+
+// Use in sockaddr_in
+struct sockaddr_in sock_addr;
+sock_addr.sin_addr = addr;
+```
+
+**Common Values:**
+- `INADDR_ANY` - 0.0.0.0 (all interfaces)
+- `INADDR_LOOPBACK` - 127.0.0.1 (localhost)
+- `INADDR_BROADCAST` - 255.255.255.255 (broadcast address)
+
+---
+
+### struct sockaddr
+
+Generic socket address structure. Used as a base type for casting to specific address types (like `sockaddr_in`).
+
+**Definition:**
+```c
+#include <sys/socket.h>
+
+struct sockaddr {
+    unsigned short sa_family;  // Address family (AF_INET, AF_INET6, etc.)
+    char           sa_data[14]; // Address data (size varies by family)
+};
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sa_family` | `unsigned short` | Address family (e.g., `AF_INET` for IPv4, `AF_INET6` for IPv6) |
+| `sa_data[14]` | `char[14]` | Address data. Format depends on `sa_family`. For IPv4, this contains IP and port. |
+
+**Important Notes:**
+
+1. **Never use directly**: This structure is too generic. Always use `struct sockaddr_in` for IPv4 and cast to `struct sockaddr*` when passing to system calls.
+
+2. **Casting Pattern**: All socket functions accept `struct sockaddr*`, but you pass `struct sockaddr_in*` cast to `struct sockaddr*`:
+
+```c
+struct sockaddr_in addr;
+// ... fill addr ...
+
+// Cast to sockaddr* when calling system functions
+bind(fd, (struct sockaddr*)&addr, sizeof(addr));
+connect(fd, (struct sockaddr*)&addr, sizeof(addr));
+accept(fd, (struct sockaddr*)&addr, &addr_len);
+```
+
+3. **Size**: Always pass the size of the actual structure (`sizeof(sockaddr_in)`) to system calls, not `sizeof(sockaddr)`.
+
+**Why This Structure Exists:**
+
+- Provides a common interface for different address families (IPv4, IPv6, Unix domain sockets, etc.)
+- Socket functions can work with any address type through this generic interface
+- The actual address format is determined by `sa_family`
+
+**Usage Example:**
+```c
+struct sockaddr_in addr_in;
+// ... initialize addr_in ...
+
+// Cast to generic sockaddr* for system calls
+bind(socket_fd, (struct sockaddr*)&addr_in, sizeof(addr_in));
+
+// When accepting connections:
+struct sockaddr_in client_addr;
+socklen_t client_len = sizeof(client_addr);
+int client_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
+```
+
+---
+
+## Notes on Socket Structures
+
+1. **Memory Initialization**: Always zero out socket structures before use:
+   ```c
+   struct sockaddr_in addr;
+   memset(&addr, 0, sizeof(addr));  // Important!
+   ```
+
+2. **Byte Order**: Always use network byte order functions (`htons`, `htonl`, `ntohs`, `ntohl`) when working with ports and IP addresses.
+
+3. **Size Parameter**: Always pass the correct size (`sizeof(sockaddr_in)`) to system calls, not `sizeof(sockaddr)`.
+
+4. **Casting**: Always cast `sockaddr_in*` to `sockaddr*` when passing to system functions.
+
+5. **Platform Differences**: These structures are standardized by POSIX and work the same on Linux and macOS.
+
+---
+
 ## Notes
 
 - All string fields are empty by default (except `client_max_body_size` which defaults to 1 MB)
