@@ -219,9 +219,12 @@ class Socket {
     int getPort() const;
 
    private:
-    int fd_;
-    std::string host_;
-    int port_;
+    int fd_;              // File descriptor of the socket
+    std::string host_;    // Host address (IP) the socket is bound to
+    int port_;            // Port number the socket is bound to
+
+    Socket(const Socket&);            // Copy constructor (disabled)
+    Socket& operator=(const Socket&); // Assignment operator (disabled)
 };
 ```
 
@@ -229,54 +232,167 @@ class Socket {
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `Socket()` | - | Default constructor. Initializes socket with invalid file descriptor. |
-| `~Socket()` | - | Destructor. Closes the socket if it's still open. |
-| `bind(const std::string& host, int port)` | `bool` | Creates a socket, sets it to non-blocking mode, and binds it to the specified host and port. Returns `true` on success. |
-| `listen(int backlog)` | `bool` | Starts listening for incoming connections. `backlog` specifies the maximum length of the queue of pending connections (default: 128). |
-| `accept()` | `int` | Accepts a new connection. Returns the file descriptor of the new client socket, or -1 on error. |
-| `close()` | `void` | Closes the socket and marks it as invalid. |
-| `setNonBlocking()` | `bool` | Sets the socket to non-blocking mode using `fcntl(F_SETFL, O_NONBLOCK)`. Returns `true` on success. |
-| `setCloseOnExec()` | `bool` | Sets the close-on-exec flag using `fcntl(F_SETFD, FD_CLOEXEC)`. Returns `true` on success. |
-| `getFd() const` | `int` | Returns the file descriptor of the socket. |
-| `isValid() const` | `bool` | Returns `true` if the socket is valid (fd >= 0). |
-| `getHost() const` | `std::string` | Returns the host address the socket is bound to. |
-| `getPort() const` | `int` | Returns the port number the socket is bound to. |
+| `Socket()` | - | Default constructor. Initializes socket with invalid file descriptor (`fd_ = -1`). |
+| `~Socket()` | - | Destructor. Automatically closes the socket if it's still open by calling `close()`. |
+| `bind(const std::string& host, int port)` | `bool` | Creates a TCP socket, configures it (SO_REUSEADDR, non-blocking, close-on-exec), and binds it to the specified host and port. Returns `true` on success, `false` on error. |
+| `listen(int backlog)` | `bool` | Starts listening for incoming connections. `backlog` specifies the maximum length of the queue of pending connections (default: 128). Returns `true` on success. |
+| `accept()` | `int` | Accepts a new connection from the listening socket. Returns the file descriptor of the new client socket, or -1 on error. The returned socket is in blocking mode by default. |
+| `close()` | `void` | Closes the socket by calling `::close(fd_)` and sets `fd_` to -1. Safe to call multiple times. |
+| `setNonBlocking()` | `bool` | Sets the socket to non-blocking mode using `fcntl(F_SETFL, O_NONBLOCK)`. Returns `true` on success. Must be called on a valid socket (fd_ >= 0). |
+| `setCloseOnExec()` | `bool` | Sets the close-on-exec flag using `fcntl(F_SETFD, FD_CLOEXEC)`. This ensures the socket is closed when a new program is executed. Returns `true` on success. |
+| `getFd() const` | `int` | Returns the file descriptor of the socket. Returns -1 if socket is not initialized or closed. |
+| `isValid() const` | `bool` | Returns `true` if the socket is valid (fd_ >= 0), `false` otherwise. |
+| `getHost() const` | `std::string` | Returns the host address the socket is bound to (e.g., "127.0.0.1" or "0.0.0.0"). Empty string if not bound. |
+| `getPort() const` | `int` | Returns the port number the socket is bound to. Returns 0 if not bound. |
+
+**Private Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `fd_` | `int` | File descriptor of the socket. -1 indicates invalid/uninitialized socket. |
+| `host_` | `std::string` | IP address the socket is bound to (e.g., "127.0.0.1", "0.0.0.0"). |
+| `port_` | `int` | Port number the socket is bound to. |
 
 **Features:**
-- Automatic socket creation and configuration
-- Non-blocking mode support
-- Close-on-exec flag for security
-- SO_REUSEADDR socket option to allow address reuse
-- Support for both specific interfaces (e.g., "127.0.0.1") and any interface ("0.0.0.0")
+- **Automatic socket creation**: Creates TCP socket (AF_INET, SOCK_STREAM) in `bind()`
+- **Non-blocking mode**: All sockets are automatically set to non-blocking mode
+- **Close-on-exec flag**: Sockets are automatically configured with FD_CLOEXEC for security
+- **SO_REUSEADDR**: Allows address reuse to avoid "Address already in use" errors
+- **Flexible binding**: Supports both specific interfaces (e.g., "127.0.0.1") and any interface ("0.0.0.0" or empty string)
+- **RAII**: Automatic cleanup in destructor
+- **Non-copyable**: Copy constructor and assignment operator are disabled to prevent accidental copying
 
-**Usage Example:**
+**Socket Lifecycle:**
+
+1. **Construction**: `Socket()` - Creates object with `fd_ = -1` (invalid)
+2. **Binding**: `bind(host, port)` - Creates socket, configures it, and binds to address
+3. **Listening**: `listen(backlog)` - Starts listening for connections
+4. **Accepting**: `accept()` - Accepts new connections (can be called multiple times)
+5. **Closing**: `close()` or destructor - Closes the socket
+
+**System Calls Used:**
+
+- `socket(AF_INET, SOCK_STREAM, 0)` - Creates TCP socket
+- `setsockopt(..., SO_REUSEADDR, ...)` - Enables address reuse
+- `fcntl(..., F_SETFL, O_NONBLOCK)` - Sets non-blocking mode
+- `fcntl(..., F_SETFD, FD_CLOEXEC)` - Sets close-on-exec flag
+- `bind(...)` - Binds socket to address and port
+- `listen(...)` - Starts listening for connections
+- `accept(...)` - Accepts new connection
+- `close(...)` - Closes file descriptor
+
+**Usage Example - Basic:**
 ```cpp
 Socket socket;
 
+// Bind to localhost on port 8080
 if (!socket.bind("127.0.0.1", 8080)) {
     std::cerr << "Failed to bind socket" << std::endl;
     return 1;
 }
 
+// Start listening
 if (!socket.listen(128)) {
     std::cerr << "Failed to listen" << std::endl;
     return 1;
 }
 
-int client_fd = socket.accept();
-if (client_fd >= 0) {
-    // ...
-    ::close(client_fd);
+// Accept connections in a loop
+while (true) {
+    int client_fd = socket.accept();
+    if (client_fd >= 0) {
+        // Handle client connection
+        // ...
+        ::close(client_fd);
+    }
 }
 
 socket.close();
 ```
 
+**Usage Example - In Server Class:**
+```cpp
+// In Server::init()
+const ServerConfig& server_config = config.getServers()[0];
+for (size_t i = 0; i < server_config.listen.size(); ++i) {
+    const std::string& host = server_config.listen[i].first;
+    int port = server_config.listen[i].second;
+
+    Socket* socket = new Socket();
+    if (!socket->bind(host, port)) {
+        delete socket;
+        continue;  // Skip this address
+    }
+
+    if (!socket->listen()) {
+        delete socket;
+        continue;  // Skip this address
+    }
+
+    listening_sockets_.push_back(socket);
+    // Register socket file descriptor in poll()
+}
+
+// In Server::acceptNewConnection()
+int client_fd = socket->accept();
+if (client_fd >= 0) {
+    // Set client socket to non-blocking
+    fcntl(client_fd, F_SETFL, O_NONBLOCK);
+    
+    // Create Connection object
+    Connection* conn = new Connection(client_fd, client_ip);
+    connections_[client_fd] = conn;
+}
+```
+
 **Error Handling:**
-- `bind()` returns `false` if socket creation, binding, or configuration fails
-- `listen()` returns `false` if the socket cannot start listening
-- `accept()` returns -1 on error (check `errno` for details)
-- Errors are logged using the Logger system
+- `bind()` returns `false` if:
+  - Socket creation fails (`socket()` returns -1)
+  - Setting SO_REUSEADDR fails
+  - Setting non-blocking mode fails
+  - Setting close-on-exec flag fails
+  - Invalid host address (for specific interfaces)
+  - Binding fails (port already in use, permission denied, etc.)
+- `listen()` returns `false` if:
+  - Socket is invalid (fd_ < 0)
+  - `listen()` system call fails
+- `accept()` returns -1 on error:
+  - Socket is invalid (fd_ < 0)
+  - `accept()` system call fails (check `errno` for details)
+  - In non-blocking mode, returns -1 with `errno = EAGAIN` if no connections are pending
+- `setNonBlocking()` returns `false` if:
+  - Socket is invalid (fd_ < 0)
+  - `fcntl()` fails
+- `setCloseOnExec()` returns `false` if:
+  - Socket is invalid (fd_ < 0)
+  - `fcntl()` fails
+- All errors are logged using the Logger system
+
+**Important Notes:**
+
+1. **Non-blocking mode**: All sockets created by `bind()` are automatically set to non-blocking mode. This is essential for event-driven I/O using `poll()` or `select()`.
+
+2. **Client sockets from accept()**: The socket returned by `accept()` is in blocking mode by default. You should set it to non-blocking mode after accepting:
+   ```cpp
+   int client_fd = socket.accept();
+   if (client_fd >= 0) {
+       fcntl(client_fd, F_SETFL, O_NONBLOCK);
+       // Use client_fd...
+   }
+   ```
+
+3. **Address reuse**: SO_REUSEADDR allows the server to restart immediately without waiting for the TIME_WAIT state to expire. This is especially useful during development.
+
+4. **Close-on-exec**: FD_CLOEXEC ensures that the socket is closed when a new program is executed (e.g., in CGI scripts). This prevents file descriptor leaks.
+
+5. **Host binding**:
+   - `"127.0.0.1"` - Binds to localhost only (accessible only from local machine)
+   - `"0.0.0.0"` or `""` - Binds to all interfaces (accessible from network)
+   - Specific IP (e.g., `"192.168.1.100"`) - Binds to specific network interface
+
+6. **One socket per address**: Each `Socket` object represents one listening socket. To listen on multiple addresses, create multiple `Socket` objects.
+
+7. **Memory management**: `Socket` objects are typically managed by the `Server` class. They are created with `new` and stored in `listening_sockets_` vector. The `Server` destructor deletes all socket objects.
 
 ---
 
