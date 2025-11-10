@@ -656,20 +656,6 @@ htop -p $(pgrep webserv)
 
 ---
 
-## Next Steps
-
-After verifying basic functionality:
-
-1. **Stage 3**: Test HTTP request parsing
-2. **Stage 4**: Test static file serving
-3. **Stage 5**: Test HTTP methods (GET, POST, DELETE)
-4. **Stage 6**: Test limits and timeouts
-5. **Stage 7**: Test CGI execution
-6. **Stage 8**: Test redirects
-7. **Stage 10**: Run stress tests and load tests
-
----
-
 ## References
 
 - [cURL Documentation](https://curl.se/docs/)
