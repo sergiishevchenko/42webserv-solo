@@ -1,7 +1,18 @@
 #include <string>
 #include <sstream>
+#include <csignal>
 #include "ConfigParser.hpp"
 #include "Logger.hpp"
+#include "Server.hpp"
+
+static Server* g_server = NULL;
+
+static void signalHandler(int sig) {
+    (void)sig;
+    if (g_server) {
+        g_server->stop();
+    }
+}
 
 static void printUsage(const char* progName) {
     LOG_ERROR() << "Usage: " << progName << " <configuration file>"
@@ -15,6 +26,7 @@ int main(int argc, char** argv) {
     }
 
     const std::string configPath = argv[1];
+    Logger::getInstance().setLogLevel(LOG_DEBUG);
     ConfigParser parser;
 
     if (!parser.loadFromFile(configPath)) {
@@ -92,6 +104,19 @@ int main(int argc, char** argv) {
         }
         LOG_INFO() << oss.str();
     }
+
+    Server server;
+    g_server = &server;
+
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
+
+    if (!server.init(parser)) {
+        LOG_ERROR() << "Failed to initialize server" << std::endl;
+        return 1;
+    }
+
+    server.run();
 
     return 0;
 }
