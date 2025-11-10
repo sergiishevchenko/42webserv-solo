@@ -125,7 +125,7 @@ Locations: 3
 
 ```bash
 # Run the configuration test script
-./test_config.sh
+./scripts/test_config.sh
 ```
 
 ---
