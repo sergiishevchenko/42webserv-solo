@@ -20,7 +20,7 @@ struct Location {
 };
 
 struct ServerConfig {
-    std::vector<std::pair<std::string, int> > listen;
+    std::vector<std::pair<std::string, int>> listen;
     std::string root;
     std::string index;
     size_t client_max_body_size;

@@ -18,7 +18,8 @@ std::string ConfigParser::trim(const std::string& str) {
     return str.substr(first, (last - first + 1));
 }
 
-std::vector<std::string> ConfigParser::split(const std::string& str, char delim) {
+std::vector<std::string> ConfigParser::split(const std::string& str,
+                                             char delim) {
     std::vector<std::string> tokens;
     std::stringstream ss(str);
     std::string token;
@@ -84,7 +85,8 @@ bool ConfigParser::parseListen(const std::string& line, ServerConfig& server) {
     return false;
 }
 
-bool ConfigParser::parseDirective(const std::string& line, ServerConfig& server) {
+bool ConfigParser::parseDirective(const std::string& line,
+                                  ServerConfig& server) {
     std::string trimmed = trim(line);
 
     size_t commentPos = trimmed.find('#');
@@ -139,7 +141,7 @@ bool ConfigParser::parseDirective(const std::string& line, ServerConfig& server)
 }
 
 bool ConfigParser::parseLocationDirective(const std::string& line,
-                                    Location& location) {
+                                          Location& location) {
     std::string trimmed = trim(line);
 
     size_t commentPos = trimmed.find('#');
@@ -238,7 +240,10 @@ bool ConfigParser::parseServerBlock(std::istream& in, ServerConfig& server) {
                         std::string nextTrimmed = trim(nextLine);
                         if (nextTrimmed != "{") {
                             lastError_ =
-                                "Parse error: Expected '{' after location path";
+                                "Parse error: "
+                                "Expected '{' "
+                                "after "
+                                "location path";
                             return false;
                         }
                     }
@@ -276,7 +281,9 @@ bool ConfigParser::loadFromFile(const std::string& filepath) {
             ServerConfig server;
             if (!parseServerBlock(file, server)) {
                 if (lastError_.empty()) {
-                    lastError_ = "Parse error: Failed to parse server block";
+                    lastError_ =
+                        "Parse error: Failed to "
+                        "parse server block";
                 }
                 return false;
             }
@@ -323,8 +330,9 @@ bool ConfigParser::validate() const {
         }
 
         if (server.client_max_body_size == 0) {
-            lastError_ =
-                ss.str() + ": 'client_max_body_size' must be greater than 0";
+            lastError_ = ss.str() +
+                         ": 'client_max_body_size' must "
+                         "be greater than 0";
             return false;
         }
 
@@ -337,10 +345,11 @@ bool ConfigParser::validate() const {
             if (loc.redirect.empty() && loc.upload_store.empty() &&
                 loc.cgi_pass.empty() && loc.root.empty()) {
                 if (loc.methods.empty()) {
-                    lastError_ =
-                        ss.str() +
-                        ": No methods specified and no special directives "
-                        "(upload_store, cgi_pass, redirect)";
+                    lastError_ = ss.str() +
+                                 ": No methods specified and no "
+                                 "special directives "
+                                 "(upload_store, cgi_pass, "
+                                 "redirect)";
                     return false;
                 }
             }
