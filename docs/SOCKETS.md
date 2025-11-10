@@ -74,6 +74,31 @@ SERVER                          CLIENT
    - File descriptor is a "handle" for accessing an operating system resource
    - This is an identifier that the OS kernel returns to the program when creating a resource
 
+   **Why is it called "file descriptor"?**
+
+   The name "file descriptor" comes from Unix history and philosophy:
+
+   1. **Historical origin**: In early Unix systems, this mechanism was created primarily for working with files on disk. The `open()` system call returned a number (descriptor) that "described" or "identified" an opened file.
+
+   2. **"Everything is a file" philosophy**: Unix treats many things as files:
+      - Regular files on disk
+      - Directories (special files)
+      - Devices (represented as files in `/dev`)
+      - Sockets (network connections)
+      - Pipes (inter-process communication)
+   
+   3. **Unified interface**: Since all these resources use the same interface (`read()`, `write()`, `close()`), they all use the same mechanism — file descriptors.
+
+   4. **Name stuck**: Even though descriptors are now used for sockets, pipes, devices, and other non-file resources, the original name "file descriptor" remained because:
+      - It was the first use case
+      - The interface is the same as for files
+      - It reflects the Unix philosophy
+
+   **In other words:**
+   - "File" = follows the Unix "everything is a file" concept
+   - "Descriptor" = describes/identifies a resource (not necessarily a file on disk)
+   - The name is historical but still accurate because sockets, pipes, and devices are treated as "files" in Unix
+
    **What "identifier returned by the OS kernel" means:**
 
    When you call a system call (e.g., `socket()`, `open()`, `pipe()`), the following happens:
