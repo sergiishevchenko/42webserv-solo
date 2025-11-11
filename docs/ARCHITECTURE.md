@@ -10,23 +10,23 @@ This document provides a detailed diagram of how different components of the web
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         main.cpp                             │
-│  - Entry point                                                │
-│  - Signal handling                                           │
-│  - Orchestrates initialization                               │
+│                         main.cpp                            │
+│  - Entry point                                              │
+│  - Signal handling                                          │
+│  - Orchestrates initialization                              │
 └────────────┬────────────────────────────────────────────────┘
              │
              ├─────────────────────────────────────┐
              │                                     │
              ▼                                     ▼
-    ┌──────────────────┐              ┌──────────────────┐
-    │  ConfigParser    │              │     Server       │
-    │                  │              │                  │
-    │  - File parsing  │              │  - Event loop    │
-    │  - Validation   │──────────────▶│  - Connection mgmt│
-    │  - ServerConfig │  provides    │  - Socket mgmt   │
-    └──────────────────┘  config     └────────┬─────────┘
-                                               │
+    ┌──────────────────┐              ┌──────────────────-┐
+    │  ConfigParser    │              │     Server        │
+    │                  │              │                   │
+    │  - File parsing  │              │  - Event loop     │
+    │  - Validation    │─────────────▶│  - Connection mgmt│
+    │  - ServerConfig  │  provides    │  - Socket mgmt    │
+    └──────────────────┘  config      └───────┬─────────--┘
+                                              │
                     ┌─────────────────────────┼─────────────────────────┐
                     │                         │                         │
                     ▼                         ▼                         ▼
@@ -72,7 +72,7 @@ This document provides a detailed diagram of how different components of the web
 **Key Data Structures:**
 ```cpp
 struct ServerConfig {
-    std::vector<std::pair<std::string, int>> listen;  // host:port pairs
+    std::vector<std::pair<std::string, int>> listen;   // host:port pairs
     std::string root;                                  // Document root
     std::string index;                                 // Default index file
     size_t client_max_body_size;                       // Max request body size
@@ -82,13 +82,13 @@ struct ServerConfig {
 
 struct Location {
     std::string path;                                  // Route path
-    std::set<std::string> methods;                    // Allowed HTTP methods
+    std::set<std::string> methods;                     // Allowed HTTP methods
     std::string root;                                  // Location-specific root
     std::string index;                                 // Location-specific index
     bool autoindex;                                    // Directory listing flag
-    std::string redirect;                               // Redirect URL
-    std::string upload_store;                           // Upload directory
-    std::map<std::string, std::string> cgi_pass;      // CGI handler mappings
+    std::string redirect;                              // Redirect URL
+    std::string upload_store;                          // Upload directory
+    std::map<std::string, std::string> cgi_pass;       // CGI handler mappings
 };
 ```
 
@@ -444,40 +444,40 @@ LOG_ERROR() << "Error message" << std::endl;
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ main()                                                       │
-│                                                              │
+│ main()                                                      │
+│                                                             │
 │  1. Parse command-line arguments                            │
-│  2. Set up signal handlers                                   │
-│  3. Create ConfigParser                                      │
+│  2. Set up signal handlers                                  │
+│  3. Create ConfigParser                                     │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
-        ┌────────────────────────┐
-        │ ConfigParser           │
-        │                        │
-        │ loadFromFile()         │
-        │   ├─ Read config file  │
+        ┌────────────────────────-┐
+        │ ConfigParser            │
+        │                         │
+        │ loadFromFile()          │
+        │   ├─ Read config file   │
         │   ├─ Parse server blocks│
-        │   └─ Build ServerConfig│
-        │                        │
-        │ validate()             │
-        │   ├─ Check servers     │
-        │   ├─ Validate ports    │
-        │   └─ Check required    │
-        └────────────┬───────────┘
+        │   └─ Build ServerConfig │
+        │                         │
+        │ validate()              │
+        │   ├─ Check servers      │
+        │   ├─ Validate ports     │
+        │   └─ Check required     │
+        └────────────┬───────────-┘
                      │
                      ▼
         ┌────────────────────────┐
-        │ Server                │
+        │ Server                 │
         │                        │
-        │ init(ConfigParser)    │
-        │   ├─ Get ServerConfig │
-        │   ├─ For each listen: │
-        │   │   ├─ new Socket() │
+        │ init(ConfigParser)     │
+        │   ├─ Get ServerConfig  │
+        │   ├─ For each listen:  │
+        │   │   ├─ new Socket()  │
         │   │   ├─ bind()        │
         │   │   ├─ listen()      │
-        │   │   └─ Add to list  │
-        │   └─ Register in poll │
+        │   │   └─ Add to list   │
+        │   └─ Register in poll  │
         └────────────┬───────────┘
                      │
                      ▼
@@ -488,19 +488,19 @@ LOG_ERROR() << "Error message" << std::endl;
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Server::run()                                                │
-│                                                              │
+│ Server::run()                                               │
+│                                                             │
 │  while (running_) {                                         │
-│                                                              │
+│                                                             │
 │    ┌──────────────────────────────────────┐                 │
 │    │ setupPollFds()                       │                 │
 │    │   ├─ Clear poll_fds_                 │                 │
-│    │   ├─ Add listening sockets (POLLIN) │                 │
+│    │   ├─ Add listening sockets (POLLIN)  │                 │
 │    │   └─ Add client connections          │                 │
 │    │      (POLLIN | POLLOUT)              │                 │
 │    └──────────────────────────────────────┘                 │
-│                     │                                        │
-│                     ▼                                        │
+│                     │                                       │
+│                     ▼                                       │
 │    ┌──────────────────────────────────────┐                 │
 │    │ poll(poll_fds_, timeout)             │                 │
 │    │   ├─ Wait for events (1 second)      │                 │
@@ -508,39 +508,39 @@ LOG_ERROR() << "Error message" << std::endl;
 │    │   │  -1: error                       │                 │
 │    │   │   0: timeout                     │                 │
 │    │   │  >0: number of events            │                 │
-│    │   └─ Sets revents in poll_fds_      │                 │
+│    │   └─ Sets revents in poll_fds_       │                 │
 │    └──────────────────────────────────────┘                 │
-│                     │                                        │
-│         ┌───────────┴───────────┐                          │
-│         │                       │                          │
-│         ▼                       ▼                          │
+│                     │                                       │
+│         ┌───────────┴───────────┐                           │
+│         │                       │                           │
+│         ▼                       ▼                           │
 │    [Timeout]              [Events]                          │
-│         │                       │                          │
-│         │                       ▼                          │
-│         │          ┌──────────────────────┐                │
-│         │          │ handlePollEvents()   │                │
-│         │          │                      │                │
-│         │          │ For each pollfd:     │                │
-│         │          │   ├─ Check errors   │                │
-│         │          │   ├─ If listening:   │                │
-│         │          │   │   └─ accept()   │                │
-│         │          │   └─ If client:      │                │
-│         │          │       ├─ POLLIN:     │                │
-│         │          │       │   recv()     │                │
-│         │          │       └─ POLLOUT:    │                │
-│         │          │           send()     │                │
-│         │          └──────────────────────┘                │
-│         │                       │                          │
-│         └───────────┬───────────┘                          │
-│                     │                                        │
-│                     ▼                                        │
+│         │                       │                           │
+│         │                       ▼                           │
+│         │          ┌──────────────────────┐                 │
+│         │          │ handlePollEvents()   │                 │
+│         │          │                      │                 │
+│         │          │ For each pollfd:     │                 │
+│         │          │   ├─ Check errors    │                 │
+│         │          │   ├─ If listening:   │                 │
+│         │          │   │   └─ accept()    │                 │
+│         │          │   └─ If client:      │                 │
+│         │          │       ├─ POLLIN:     │                 │
+│         │          │       │   recv()     │                 │
+│         │          │       └─ POLLOUT:    │                 │
+│         │          │           send()     │                 │
+│         │          └──────────────────────┘                 │
+│         │                       │                           │
+│         └───────────┬───────────┘                           │
+│                     │                                       │
+│                     ▼                                       │
 │    ┌──────────────────────────────────────┐                 │
 │    │ cleanupTimedOutConnections()         │                 │
 │    │   ├─ Check each connection           │                 │
 │    │   └─ Close timed out connections     │                 │
 │    └──────────────────────────────────────┘                 │
-│                                                              │
-│  }                                                            │
+│                                                             │
+│  }                                                          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -567,19 +567,19 @@ Client connects
 │ acceptNewConnection(Socket*)        │
 │                                     │
 │   1. Socket::accept()               │
-│      └─ Returns client_fd          │
+│      └─ Returns client_fd           │
 │                                     │
-│   2. fcntl(client_fd, O_NONBLOCK)  │
-│      └─ Set non-blocking mode      │
+│   2. fcntl(client_fd, O_NONBLOCK)   │
+│      └─ Set non-blocking mode       │
 │                                     │
 │   3. getpeername(client_fd)         │
-│      └─ Get client IP address      │
+│      └─ Get client IP address       │
 │                                     │
-│   4. new Connection(client_fd, ip) │
-│      └─ Create Connection object   │
+│   4. new Connection(client_fd, ip)  │
+│      └─ Create Connection object    │
 │                                     │
 │   5. connections_[client_fd] = conn │
-│      └─ Store in map               │
+│      └─ Store in map                │
 └──────────────┬──────────────────────┘
                │
                ▼
@@ -613,24 +613,24 @@ Client sends HTTP request
 │      └─ conn = connections_[fd]     │
 │                                     │
 │   2. conn->updateActivity()         │
-│      └─ Update timestamp           │
+│      └─ Update timestamp            │
 │                                     │
-│   3. recv(fd, buffer, size, 0)     │
-│      └─ Read request data          │
+│   3. recv(fd, buffer, size, 0)      │
+│      └─ Read request data           │
 │                                     │
 │   4. Process request                │
 │      └─ (Currently simple response) │
 │                                     │
-│   5. send(fd, response, size, 0)   │
+│   5. send(fd, response, size, 0)    │
 │      └─ Send HTTP response          │
 │                                     │
-│   6. closeConnection(fd)             │
+│   6. closeConnection(fd)            │
 │      └─ Clean up connection         │
 └──────────────┬──────────────────────┘
                │
                ▼
 ┌─────────────────────────────────────┐
-│ closeConnection(int fd)              │
+│ closeConnection(int fd)             │
 │                                     │
 │   1. Find Connection in map         │
 │                                     │
@@ -639,7 +639,7 @@ Client sends HTTP request
 │         └─ close(fd)                │
 │                                     │
 │   3. connections_.erase(fd)         │
-│      └─ Remove from map            │
+│      └─ Remove from map             │
 └─────────────────────────────────────┘
 ```
 
@@ -671,7 +671,7 @@ Signal (SIGINT/SIGTERM)
 │   4. Clear poll_fds_                │
 │                                     │
 │   5. Delete all Sockets             │
-│      └─ For each in listening_:    │
+│      └─ For each in listening_:     │
 │         └─ delete Socket*           │
 │            └─ close(fd)             │
 │                                     │
@@ -735,15 +735,15 @@ New Connection Request
 └──────────────┬──────────────────────┘
                │
                ▼
-┌─────────────────────────────────────┐
+┌────────────────────────────────────-─┐
 │ connections_[client_fd] = Connection*│
-│   └─ Stored in map                  │
-└──────────────┬──────────────────────┘
+│   └─ Stored in map                   │
+└──────────────┬──────────────────────-┘
                │
                ▼
 ┌─────────────────────────────────────┐
 │ setupPollFds()                      │
-│   └─ Add client_fd to poll_fds_    │
+│   └─ Add client_fd to poll_fds_     │
 │      with POLLIN | POLLOUT          │
 └──────────────┬──────────────────────┘
                │
@@ -758,7 +758,7 @@ HTTP Request arrives
       │
       ▼
 ┌─────────────────────────────────────┐
-│ poll() → POLLIN event on client_fd │
+│ poll() → POLLIN event on client_fd  │
 └──────────────┬──────────────────────┘
                │
                ▼
@@ -769,23 +769,23 @@ HTTP Request arrives
 │      └─ conn = connections_[fd]     │
 │                                     │
 │   2. Update activity                │
-│      └─ conn->updateActivity()     │
+│      └─ conn->updateActivity()      │
 │                                     │
 │   3. Read request                   │
-│      └─ recv(fd, buffer, size)     │
+│      └─ recv(fd, buffer, size)      │
 │         └─ Returns: HTTP request    │
 │            string                   │
 │                                     │
 │   4. Process request                │
-│      └─ (Parse, route, etc.)       │
+│      └─ (Parse, route, etc.)        │
 │                                     │
 │   5. Build response                 │
-│      └─ HTTP response string       │
+│      └─ HTTP response string        │
 │                                     │
 │   6. Send response                  │
-│      └─ send(fd, response, size)   │
+│      └─ send(fd, response, size)    │
 │                                     │
-│   7. Close connection                │
+│   7. Close connection               │
 │      └─ closeConnection(fd)         │
 └─────────────────────────────────────┘
 ```
@@ -830,15 +830,15 @@ HTTP Request arrives
    ┌───┴───┐
    │       │
    ▼       ▼
-┌──────┐ ┌──────────┐
+┌─────-─┐ ┌──────────┐
 │TIMEOUT│ │  EVENT   │
-│      │ │          │
+│       │ │          │
 │(1 sec)│ │(POLLIN/  │
-│      │ │ POLLOUT) │
-└───┬──┘ └────┬─────┘
-    │         │
-    │         │ handlePollEvents()
-    │         ▼
+│       │ │ POLLOUT) │
+└───┬──-┘ └────┬─────┘
+    │          │
+    │          │ handlePollEvents()
+    │          ▼
     │    ┌──────────┐
     │    │ PROCESS  │
     │    │          │
@@ -961,7 +961,7 @@ Server::stop()
 ┌─────────────────────────────────────┐
 │ Check errno                         │
 │                                     │
-│   ├─ EAGAIN / EWOULDBLOCK          │
+│   ├─ EAGAIN / EWOULDBLOCK           │
 │   │   └─ Non-blocking operation     │
 │   │      would block (normal)       │
 │   │      → Continue                 │
