@@ -825,4 +825,3 @@ For more detailed information see:
 - `docs/SOCKETS.md` - general information about sockets
 - `src/Server.cpp` - connection handling implementation
 - `src/Connection.cpp` - connection management class
-
