@@ -38,8 +38,8 @@ send(fd=5, "HTTP/1.1 200 OK\r\n...", 100, 0);
 ```
 Program (user space):
 ┌─────────────────────────────────────┐
-│ char* data = "HTTP/1.1 200 OK..."; │
-│ size = 100 bytes                     │
+│ char* data = "HTTP/1.1 200 OK...";  │
+│ size = 100 bytes                    │
 └──────────────┬──────────────────────┘
                │
                │ send(fd=5, data, 100, 0)
@@ -48,10 +48,10 @@ Program (user space):
 OS Kernel (kernel space):
 ┌─────────────────────────────────────┐
 │ Socket fd=5 structure:              │
-│ ┌───────────────────────────────┐  │
-│ │ Send Buffer (kernel buffer)    │  │
-│ │ [empty]                        │  │
-│ └───────────────────────────────┘  │
+│ ┌───────────────────────────────┐   │
+│ │ Send Buffer (kernel buffer)   │   │
+│ │ [empty]                       │   │
+│ └───────────────────────────────┘   │
 └─────────────────────────────────────┘
 ```
 
@@ -66,14 +66,14 @@ OS Kernel (kernel space):
 OS Kernel (kernel space):
 ┌─────────────────────────────────────┐
 │ Socket fd=5 structure:              │
-│ ┌───────────────────────────────┐  │
-│ │ Send Buffer                   │  │
-│ │ "HTTP/1.1 200 OK\r\n..."      │  │ ← 100 bytes
-│ │ [100 bytes copied]            │  │
-│ └───────────────────────────────┘  │
+│ ┌───────────────────────────────┐   │
+│ │ Send Buffer                   │   │
+│ │ "HTTP/1.1 200 OK\r\n..."      │   │ ← 100 bytes
+│ │ [100 bytes copied]            │   │
+│ └───────────────────────────────┘   │
 │                                     │
 │ State: ESTABLISHED                  │
-│ Remote: 192.168.1.100:54321        │
+│ Remote: 192.168.1.100:54321         │
 └─────────────────────────────────────┘
 ```
 
@@ -87,25 +87,25 @@ OS Kernel (kernel space):
 ```
 OS Kernel:
 ┌─────────────────────────────────────┐
-│ Send Buffer: "HTTP/1.1 200 OK..."  │
+│ Send Buffer: "HTTP/1.1 200 OK..."   │
 └──────────────┬──────────────────────┘
                │
                │ TCP layer processing
                ↓
 ┌─────────────────────────────────────┐
-│ TCP Layer:                           │
-│ 1. Adds TCP header                   │
-│ 2. Splits into segments (MSS)         │
-│ 3. Adds sequence numbers              │
-│ 4. Adds checksums                    │
+│ TCP Layer:                          │
+│ 1. Adds TCP header                  │
+│ 2. Splits into segments (MSS)       │
+│ 3. Adds sequence numbers            │
+│ 4. Adds checksums                   │
 └──────────────┬──────────────────────┘
                │
                │ IP layer processing
                ↓
 ┌─────────────────────────────────────┐
-│ IP Layer:                            │
-│ 1. Adds IP header                    │
-│ 2. Routing                           │
+│ IP Layer:                           │
+│ 1. Adds IP header                   │
+│ 2. Routing                          │
 └──────────────┬──────────────────────┘
                │
                │ Network interface
@@ -145,54 +145,54 @@ ssize_t bytes_sent = send(fd=5, data, 100, 0);
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ PROGRAM (User Space)                                          │
-│                                                              │
-│  std::string response = "HTTP/1.1 200 OK\r\n...";          │
-│  send(fd=5, response.c_str(), 100, 0);                       │
-│         │                                                    │
-│         │ (1) System call                                    │
-│         ↓                                                    │
-└─────────┼────────────────────────────────────────────────────┘
+│ PROGRAM (User Space)                                        │
+│                                                             │
+│  std::string response = "HTTP/1.1 200 OK\r\n...";           │
+│  send(fd=5, response.c_str(), 100, 0);                      │
+│         │                                                   │
+│         │ (1) System call                                   │
+│         ↓                                                   │
+└─────────┼───────────────────────────────────────────────────┘
           │
           │ (switch to kernel mode)
           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ OS KERNEL (Kernel Space)                                      │
-│                                                              │
-│  (2) Finds socket by fd=5                                     │
-│  (3) Copies 100 bytes to send buffer                         │
-│      ┌──────────────────────────────┐                        │
-│      │ Send Buffer (fd=5)           │                        │
-│      │ "HTTP/1.1 200 OK\r\n..."     │                        │
-│      └──────────┬───────────────────┘                        │
-│                 │                                            │
-│                 │ (4) TCP processing                          │
-│                 ↓                                            │
-│      ┌──────────────────────────────┐                        │
-│      │ TCP Layer                    │                        │
-│      │ - Adds headers                │                        │
-│      │ - Segmentation (if needed)    │                        │
-│      └──────────┬───────────────────┘                        │
-│                 │                                            │
-│                 │ (5) IP processing                           │
-│                 ↓                                            │
-│      ┌──────────────────────────────┐                        │
-│      │ IP Layer                     │                        │
-│      │ - Routing                    │                        │
-│      └──────────┬───────────────────┘                        │
-│                 │                                            │
-│                 │ (6) Send over network (asynchronously)      │
-│                 ↓                                            │
+│ OS KERNEL (Kernel Space)                                    │
+│                                                             │
+│  (2) Finds socket by fd=5                                   │
+│  (3) Copies 100 bytes to send buffer                        │
+│      ┌──────────────────────────────┐                       │
+│      │ Send Buffer (fd=5)           │                       │
+│      │ "HTTP/1.1 200 OK\r\n..."     │                       │
+│      └──────────┬───────────────────┘                       │
+│                 │                                           │
+│                 │ (4) TCP processing                        │
+│                 ↓                                           │
+│      ┌──────────────────────────────┐                       │
+│      │ TCP Layer                    │                       │
+│      │ - Adds headers               │                       │
+│      │ - Segmentation (if needed)   │                       │
+│      └──────────┬───────────────────┘                       │
+│                 │                                           │
+│                 │ (5) IP processing                         │
+│                 ↓                                           │
+│      ┌──────────────────────────────┐                       │
+│      │ IP Layer                     │                       │
+│      │ - Routing                    │                       │
+│      └──────────┬───────────────────┘                       │
+│                 │                                           │
+│                 │ (6) Send over network (asynchronously)    │
+│                 ↓                                           │
 │  (7) Return to program: bytes_sent = 100                    │
-└─────────┼────────────────────────────────────────────────────┘
+└─────────┼───────────────────────────────────────────────────┘
           │
           │ (return to user mode)
           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ PROGRAM (User Space)                                          │
-│                                                              │
-│  // send() returned 100                                      │
-│  // Data is already in kernel buffer, transmission continues │
+│ PROGRAM (User Space)                                        │
+│                                                             │
+│  // send() returned 100                                     │
+│  // Data is already in kernel buffer, transmission continues│
 │  // Program can continue working                            │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -217,7 +217,7 @@ Client (browser):
 ┌─────────────────────────────────────┐
 │ "GET / HTTP/1.1\r\n"                │
 │ "Host: 127.0.0.1:8080\r\n"          │
-│ "User-Agent: curl/7.68.0\r\n"        │
+│ "User-Agent: curl/7.68.0\r\n"       │
 │ "\r\n"                              │
 │ [sends over network]                │
 └──────────────┬──────────────────────┘
@@ -243,17 +243,17 @@ Network → Network Interface → OS Kernel
 OS Kernel (kernel space):
 ┌─────────────────────────────────────┐
 │ Socket fd=5 structure:              │
-│ ┌───────────────────────────────┐  │
-│ │ Receive Buffer                │  │
-│ │ "GET / HTTP/1.1\r\n"          │  │
-│ │ "Host: 127.0.0.1:8080\r\n"    │  │
-│ │ "User-Agent: curl/7.68.0\r\n" │  │
-│ │ "\r\n"                        │  │
-│ │ [~80 bytes received]          │  │
-│ └───────────────────────────────┘  │
+│ ┌───────────────────────────────┐   │
+│ │ Receive Buffer                │   │
+│ │ "GET / HTTP/1.1\r\n"          │   │
+│ │ "Host: 127.0.0.1:8080\r\n"    │   │
+│ │ "User-Agent: curl/7.68.0\r\n" │   │
+│ │ "\r\n"                        │   │
+│ │ [~80 bytes received]          │   │
+│ └───────────────────────────────┘   │
 │                                     │
 │ State: ESTABLISHED                  │
-│ Remote: 192.168.1.100:54321        │
+│ Remote: 192.168.1.100:54321         │
 └─────────────────────────────────────┘
 ```
 
@@ -281,7 +281,7 @@ ssize_t bytes_read = recv(fd=5, buffer, 4095, 0);
 OS Kernel (kernel space):
 ┌─────────────────────────────────────┐
 │ Receive Buffer:                     │
-│ "GET / HTTP/1.1\r\n..."            │
+│ "GET / HTTP/1.1\r\n..."             │
 │ [80 bytes available]                │
 └──────────────┬──────────────────────┘
                │
@@ -290,7 +290,7 @@ OS Kernel (kernel space):
 Program (user space):
 ┌─────────────────────────────────────┐
 │ char buffer[4096];                  │
-│ buffer = "GET / HTTP/1.1\r\n..."   │
+│ buffer = "GET / HTTP/1.1\r\n..."    │
 │ [80 bytes copied]                   │
 └─────────────────────────────────────┘
 ```
@@ -317,63 +317,63 @@ buffer[bytes_read] = '\0';  // null-terminate for string
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ CLIENT (browser)                                              │
-│                                                              │
+│ CLIENT (browser)                                            │
+│                                                             │
 │  Sends: "GET / HTTP/1.1\r\n..."                             │
-│         │                                                    │
-│         │ (1) TCP/IP packets over network                    │
-│         ↓                                                    │
-└─────────┼────────────────────────────────────────────────────┘
+│         │                                                   │
+│         │ (1) TCP/IP packets over network                   │
+│         ↓                                                   │
+└─────────┼───────────────────────────────────────────────────┘
           │
           │
           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ OS KERNEL (Kernel Space)                                      │
-│                                                              │
-│  (2) Network interface receives packets                       │
-│  (3) TCP layer assembles segments                            │
+│ OS KERNEL (Kernel Space)                                    │
+│                                                             │
+│  (2) Network interface receives packets                     │
+│  (3) TCP layer assembles segments                           │
 │  (4) Data is placed in receive buffer                       │
-│      ┌──────────────────────────────┐                        │
-│      │ Receive Buffer (fd=5)        │                        │
-│      │ "GET / HTTP/1.1\r\n..."      │                        │
-│      │ [80 bytes]                    │                        │
-│      └──────────┬───────────────────┘                        │
-│                 │                                            │
-│                 │ (waits for recv() call from program)        │
-└─────────┼────────────────────────────────────────────────────┘
+│      ┌──────────────────────────────┐                       │
+│      │ Receive Buffer (fd=5)        │                       │
+│      │ "GET / HTTP/1.1\r\n..."      │                       │
+│      │ [80 bytes]                    │                      │
+│      └──────────┬───────────────────┘                       │
+│                 │                                           │
+│                 │ (waits for recv() call from program)      │
+└─────────┼───────────────────────────────────────────────────┘
           │
           │ (program calls recv())
           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ PROGRAM (User Space)                                          │
-│                                                              │
+│ PROGRAM (User Space)                                        │
+│                                                             │
 │  char buffer[4096];                                         │
 │  recv(fd=5, buffer, 4095, 0);                               │
-│         │                                                    │
-│         │ (5) System call                                    │
-│         ↓                                                    │
-└─────────┼────────────────────────────────────────────────────┘
+│         │                                                   │
+│         │ (5) System call                                   │
+│         ↓                                                   │
+└─────────┼───────────────────────────────────────────────────┘
           │
           │ (switch to kernel mode)
           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ OS KERNEL (Kernel Space)                                      │
-│                                                              │
-│  (6) Finds socket by fd=5                                    │
+│ OS KERNEL (Kernel Space)                                    │
+│                                                             │
+│  (6) Finds socket by fd=5                                   │
 │  (7) Copies data from receive buffer to program buffer      │
-│      ┌──────────────────────────────┐                        │
-│      │ Receive Buffer (fd=5)        │                        │
-│      │ [empty after copy]           │                        │
-│      └──────────────────────────────┘                        │
+│      ┌──────────────────────────────┐                       │
+│      │ Receive Buffer (fd=5)        │                       │
+│      │ [empty after copy]           │                       │
+│      └──────────────────────────────┘                       │
 │  (8) Return: bytes_read = 80                                │
-└─────────┼────────────────────────────────────────────────────┘
+└─────────┼───────────────────────────────────────────────────┘
           │
           │ (return to user mode)
           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ PROGRAM (User Space)                                          │
-│                                                              │
-│  // recv() returned 80                                       │
+│ PROGRAM (User Space)                                        │
+│                                                             │
+│  // recv() returned 80                                      │
 │  // buffer contains "GET / HTTP/1.1\r\n..."                 │
 │  // Program can process the data                            │
 └─────────────────────────────────────────────────────────────┘
@@ -417,27 +417,27 @@ char buffer[4096];  // Buffer in program memory
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ PROGRAM                                                      │
-│                                                              │
-│  char user_buffer[4096];  ← Level 1: User Space Buffer    │
-│                                                              │
-└──────────────┬───────────────────────────────────────────────┘
+│ PROGRAM                                                     │
+│                                                             │
+│  char user_buffer[4096];  ← Level 1: User Space Buffer      │
+│                                                             │
+└──────────────┬──────────────────────────────────────────────┘
                │
                │ send() / recv() system calls
                ↓
-┌─────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────--┐
 │ OS KERNEL                                                    │
 │                                                              │
 │  Socket fd=5:                                                │
 │  ┌──────────────────────────────┐                            │
-│  │ Send Buffer (8-64 KB)        │ ← Level 2: Socket Buffer│
+│  │ Send Buffer (8-64 KB)        │ ← Level 2: Socket Buffer   │
 │  │ Receive Buffer (8-64 KB)     │                            │
 │  └──────────┬───────────────────┘                            │
 │             │                                                │
 │             │ TCP/IP processing                              │
 │             ↓                                                │
 │  ┌──────────────────────────────┐                            │
-│  │ TCP/IP Stack Buffers         │ ← Level 3: Network Stack│
+│  │ TCP/IP Stack Buffers         │ ← Level 3: Network Stack   │
 │  └──────────┬───────────────────┘                            │
 │             │                                                │
 │             │ Network interface                              │
