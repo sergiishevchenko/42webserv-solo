@@ -108,7 +108,7 @@ SERVER                          CLIENT
    3. **The OS kernel** creates an internal data structure for the resource in its memory:
       - For socket: creates a structure with buffers, state, address, etc.
       - For file: creates a structure with file information, read position, etc.
-   4. **The kernel allocates a number** (identifier) from the process's file descriptor table
+   4. **The kernel allocates a number** (identifier) from <span style="color:red;"><strong>the process's file descriptor table</strong></span>
    5. **The kernel links the number to the resource** — writes a pointer to the created structure in the process table
    6. **The kernel returns the number to the program** — the function returns this number (e.g., 3)
 
