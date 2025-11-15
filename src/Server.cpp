@@ -64,8 +64,7 @@ void Server::addPollFd(int fd, short events) {
 }
 
 void Server::removePollFd(int fd) {
-    for (std::vector<struct pollfd>::iterator it = poll_fds_.begin();
-         it != poll_fds_.end(); ++it) {
+    for (std::vector<struct pollfd>::iterator it = poll_fds_.begin(); it != poll_fds_.end(); ++it) {
         if (it->fd == fd) {
             poll_fds_.erase(it);
             break;
@@ -74,8 +73,7 @@ void Server::removePollFd(int fd) {
 }
 
 void Server::updatePollFd(int fd, short events) {
-    for (std::vector<struct pollfd>::iterator it = poll_fds_.begin();
-         it != poll_fds_.end(); ++it) {
+    for (std::vector<struct pollfd>::iterator it = poll_fds_.begin(); it != poll_fds_.end(); ++it) {
         if (it->fd == fd) {
             it->events = events;
             break;
