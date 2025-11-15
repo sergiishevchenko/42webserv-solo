@@ -15,8 +15,7 @@ static void signalHandler(int sig) {
 }
 
 static void printUsage(const char* progName) {
-    LOG_ERROR() << "Usage: " << progName << " <configuration file>"
-                << std::endl;
+    LOG_ERROR() << "Usage: " << progName << " <configuration file>" << std::endl;
 }
 
 int main(int argc, char** argv) {

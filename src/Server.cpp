@@ -88,8 +88,7 @@ void Server::setupPollFds() {
         addPollFd(listening_sockets_[i]->getFd(), POLLIN);
     }
 
-    for (std::map<int, Connection*>::iterator it = connections_.begin();
-         it != connections_.end(); ++it) {
+    for (std::map<int, Connection*>::iterator it = connections_.begin(); it != connections_.end(); ++it) {
         addPollFd(it->first, POLLIN | POLLOUT);
     }
 }
@@ -199,8 +198,7 @@ void Server::cleanupTimedOutConnections() {
     time_t now = time(NULL);
     std::vector<int> to_close;
 
-    for (std::map<int, Connection*>::iterator it = connections_.begin();
-         it != connections_.end(); ++it) {
+    for (std::map<int, Connection*>::iterator it = connections_.begin(); it != connections_.end(); ++it) {
         if (now - it->second->getLastActivity() > connection_timeout_) {
             to_close.push_back(it->first);
         }
@@ -299,8 +297,7 @@ void Server::run() {
 void Server::stop() {
     running_ = false;
 
-    for (std::map<int, Connection*>::iterator it = connections_.begin();
-         it != connections_.end(); ++it) {
+    for (std::map<int, Connection*>::iterator it = connections_.begin(); it != connections_.end(); ++it) {
         delete it->second;
     }
     connections_.clear();
