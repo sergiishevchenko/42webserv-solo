@@ -27,16 +27,27 @@ This document provides a detailed diagram of how different components of the web
     │  - ServerConfig  │  provides    │  - Socket mgmt    │
     └──────────────────┘  config      └───────┬─────────--┘
                                               │
-                    ┌─────────────────────────┼─────────────────────────┐
-                    │                         │                         │
-                    ▼                         ▼                         ▼
-            ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-            │    Socket    │         │  Connection  │         │    Logger    │
-            │              │         │              │         │              │
-            │  - bind()    │         │  - Client fd │         │  - Logging   │
-            │  - listen()  │         │  - Activity  │         │  - Levels    │
-            │  - accept()  │         │  - Timeout   │         │              │
-            └──────────────┘         └──────────────┘         └──────────────┘
+                   ┌─────────────────────────┼─────────────────────────┐
+                   │                         │                         │
+                   ▼                         ▼                         ▼
+           ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
+           │    Socket    │         │  Connection  │         │    Logger    │
+           │              │         │              │         │              │
+           │  - bind()    │         │  - Client fd │         │  - Logging   │
+           │  - listen()  │         │  - Activity  │         │  - Levels    │
+           │  - accept()  │         │  - Timeout   │         │              │
+           └──────┬───────┘         │  - HTTP req  │         └──────────────┘
+                  │                 │    parser    │
+                  │                 └──────┬───────┘
+                  │                        │
+                  ▼                        ▼
+           ┌──────────────┐        ┌──────────────┐
+           │   Network    │        │ RequestParser│
+           │   events     │◀──────▶│  - Start line│
+           │ (poll loop)  │        │  - Headers   │
+           └──────────────┘        │  - Body/chunk│
+                                   │  - Keep-alive│
+                                   └──────────────┘
 ```
 
 ---
@@ -198,16 +209,20 @@ Server::acceptNewConnection()
 - Track client IP address
 - Monitor last activity timestamp
 - Manage connection lifecycle
+- Maintain per-connection HTTP parsing state
 
 **Key Data Members:**
 - `int fd_` - Client socket file descriptor
 - `std::string client_ip_` - Client IP address
 - `time_t last_activity_` - Timestamp of last activity
+- `RequestParser parser_` - Stateful HTTP/1.x parser instance
 
 **Key Methods:**
 - `updateActivity()` - Updates last_activity_ timestamp
 - `close()` - Closes connection file descriptor
 - `getFd()`, `getClientIp()`, `getLastActivity()` - Getters
+- `RequestParser& getRequestParser()` - Accessor for parser instance
+- `void resetRequestParser()` - Clears parser state after a completed request
 
 **Connection Lifecycle:**
 ```
@@ -259,6 +274,72 @@ Operations:
   - connections_.erase(fd)                  → Remove
 ```
 
+#### HTTP Parser Integration
+```
+Client socket fd
+  │
+  └─▶ Connection::getRequestParser()
+         │
+         ├─▶ RequestParser::consume(buffer, bytes)
+         │     ├─▶ Parses start line, headers, body/chunks
+         │     └─▶ Returns PARSE_INCOMPLETE / COMPLETE / ERROR
+         │
+         ├─▶ On PARSE_COMPLETE and keep-alive → Connection::resetRequestParser()
+         └─▶ On PARSE_ERROR or Connection:close() → parser_ discarded with Connection
+```
+Each `Connection` owns its parser so pipeline state (partial headers, partially
+received chunked bodies, etc.) remains isolated per client. The server never
+shares parser instances across sockets; this guarantees concurrency safety and
+enables keep-alive: once the response to a completed request is flushed, the
+parser resets while the TCP connection stays open.
+
+---
+
+### 4.1 HTTP Request Parser
+
+**Role:** Incrementally decode HTTP/1.0/1.1 requests from arbitrary-sized socket
+reads while enforcing RFC-inspired validation and path normalization rules.
+
+**Core states:**
+1. `STATE_REQUEST_LINE` — parse method, raw target, and version; ensure method
+   is a valid token, version is HTTP/1.0 or HTTP/1.1, and normalize the path
+   (percent-decode segments, reject attempts to escape root via `..`).
+2. `STATE_HEADERS` — accept header lines plus folded continuations, lowercase
+   header names, trim values, and detect malformed syntax.
+3. `STATE_BODY_CONTENT_LENGTH` — copy exactly `Content-Length` bytes into the
+   request body buffer.
+4. `STATE_BODY_CHUNK_*` — implement chunked transfer decoding (hex size line,
+   chunk data, CRLF, optional trailers, terminal zero-sized chunk).
+5. `STATE_COMPLETE` / `STATE_ERROR` — signal downstream logic to proceed or fail
+   with a descriptive message.
+
+**Key behaviors:**
+- Stores headers in a `std::map<std::string, std::string>` with normalized keys
+  so lookups are case-insensitive (`getHeader()` helper).
+- Tracks `content_length`, `chunked`, `keep_alive`, and the fully decoded body.
+- Determines persistent connections using HTTP version defaults plus explicit
+  `Connection` header overrides.
+- Exposes `const HttpRequest& getRequest()` so higher layers can inspect parsed
+  data without copying.
+
+**Interaction with Server event loop:**
+```
+handleClientRead(fd)
+  │
+  ├─▶ conn = connections_[fd]
+  ├─▶ parser = conn->getRequestParser()
+  ├─▶ result = parser.consume(buffer, bytes_read)
+  │     ├─▶ PARSE_INCOMPLETE → wait for more data
+  │     ├─▶ PARSE_COMPLETE  → use parser.getRequest(), build response
+  │     └─▶ PARSE_ERROR     → sendErrorResponse(), close connection
+  │
+  └─▶ if request.keep_alive → conn->resetRequestParser()
+        else → closeConnection(fd)
+```
+
+This layered approach keeps the networking code agnostic of HTTP syntax while
+ensuring every connection remembers where it left off between poll events.
+
 ---
 
 ### 5. Server
@@ -269,6 +350,7 @@ Operations:
 - Manage event loop using poll()
 - Handle new connections
 - Process client read/write events
+- Drive HTTP parsing/response flow per connection
 - Manage connection timeouts
 - Coordinate all components
 
@@ -367,9 +449,17 @@ Flow:
      - If bytes_read == 0:
        → closeConnection(fd)  (client closed)
      - If bytes_read > 0:
-       → Process request
-       → Send response
-       → closeConnection(fd)
+       → parser = connection->getRequestParser()
+       → result = parser.consume(buffer, bytes_read)
+         • PARSE_INCOMPLETE → wait for more data
+         • PARSE_ERROR → sendErrorResponse(fd, 400, parser.getError()); closeConnection(fd)
+         • PARSE_COMPLETE:
+            · request = parser.getRequest()
+            · sendParsedEcho(fd, request)   (placeholder response)
+            · if request.keep_alive:
+                  connection->resetRequestParser()
+              else:
+                  closeConnection(fd)
 ```
 
 #### `handleClientWrite(int fd)`
@@ -379,6 +469,22 @@ Flow:
   2. Update connection activity timestamp
   3. (Currently minimal implementation)
 ```
+
+#### Response helpers
+- `sendParsedEcho(int fd, const HttpRequest& request)`  
+  Builds a text/plain 200 response enumerating method, normalized path, query,
+  protocol version, keep-alive flag, body lengths, chunked flag, and all parsed
+  headers. Used as an interim handler until full Stage 4 response logic arrives.
+
+- `sendErrorResponse(int fd, int status_code, const std::string& message)`  
+  Generates a minimal error body (`<code> <reason>\n<details>\n`) and always
+  appends `Connection: close`. Relies on `reasonPhrase(status_code)` helper for
+  standard text (200, 400, 411, 413, 414, 431, 500).
+
+- `sendAll(int fd, const std::string& data)`  
+  Loops on `send()` to push the entire buffer, transparently retrying on EINTR
+  and aborting only on fatal errors. Returns `false` if the socket stops
+  accepting data so the caller can close the connection.
 
 #### `closeConnection(int fd)`
 ```
