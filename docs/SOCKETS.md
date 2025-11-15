@@ -180,6 +180,11 @@ SERVER                          CLIENT
    - Descriptors **3, 4, 5 and beyond** are examples of additional descriptors created by the program when calling `socket()`, `open()`, `accept()`, etc.
    - When you create a new resource, the OS finds the first free slot in the table (usually starting from 3, since 0-2 are already occupied)
 
+   **How to inspect descriptor usage in practice:**
+   - `lsof -p <pid>` — prints every open descriptor for a process along with the underlying file, socket, or pipe
+   - `ls -l /proc/<pid>/fd` (or `ls -l /proc/self/fd` for the current process) — shows symbolic links for each descriptor, pointing to the actual resource
+   - To check flags on a specific descriptor, query it programmatically via `fcntl(fd, F_GETFD)` (descriptor-level flags such as `FD_CLOEXEC`) and `fcntl(fd, F_GETFL)` (file-status flags such as `O_NONBLOCK`)
+
    **What happens when creating a socket:**
 
    ```cpp
