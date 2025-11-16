@@ -404,21 +404,32 @@ Manages a client connection. Tracks the client's file descriptor, IP address, an
 ```cpp
 class Connection {
    public:
-    Connection(int fd, const std::string& client_ip);
+    Connection(int fd, const std::string& client_ip, int client_port,
+               const std::string& server_host, int server_port);
     ~Connection();
 
     int getFd() const;
     std::string getClientIp() const;
+    int getClientPort() const;
+    std::string getServerHost() const;
+    int getServerPort() const;
     time_t getLastActivity() const;
     void updateActivity();
 
     void close();
     bool isValid() const;
 
+    RequestParser& getRequestParser();
+    void resetRequestParser();
+
    private:
     int fd_;
     std::string client_ip_;
+    int client_port_;
+    std::string server_host_;
+    int server_port_;
     time_t last_activity_;
+    RequestParser parser_;
 };
 ```
 
@@ -873,3 +884,205 @@ int client_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
 - All sockets are created in non-blocking mode
 - Connections are automatically tracked for timeout handling
 - The server uses `poll()` for event-driven I/O (compatible with Linux and macOS)
+
+---
+
+### HttpResponse
+
+Represents an HTTP response with status code, headers, and body. Used to build and format HTTP responses before sending to clients.
+
+**Definition:**
+```cpp
+class HttpResponse {
+   public:
+    HttpResponse();
+    ~HttpResponse();
+
+    void setStatus(int code, const std::string& reason);
+    void setHeader(const std::string& name, const std::string& value);
+    void setBody(const std::string& body);
+    void setBody(const char* data, std::size_t size);
+    void setKeepAlive(bool keep_alive);
+
+    std::string toString() const;
+    std::string getStatusLine() const;
+    std::string getHeaders() const;
+    std::string getBody() const;
+    int getStatusCode() const;
+
+    static std::string getReasonPhrase(int status_code);
+    static std::string getCurrentDate();
+
+   private:
+    int status_code_;
+    std::string reason_phrase_;
+    std::map<std::string, std::string> headers_;
+    std::string body_;
+};
+```
+
+**Public Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `HttpResponse()` | - | Constructor. Initializes response with default status 200 OK and sets Server and Date headers. |
+| `~HttpResponse()` | - | Destructor. |
+| `setStatus(int code, const std::string& reason)` | `void` | Sets HTTP status code and reason phrase. If reason is empty, uses standard reason phrase. |
+| `setHeader(const std::string& name, const std::string& value)` | `void` | Sets an HTTP header. Overwrites existing header with same name. |
+| `setBody(const std::string& body)` | `void` | Sets response body from string. Automatically sets Content-Length header. |
+| `setBody(const char* data, std::size_t size)` | `void` | Sets response body from binary data. Automatically sets Content-Length header. |
+| `setKeepAlive(bool keep_alive)` | `void` | Sets Connection header to "keep-alive" or "close". |
+| `toString() const` | `std::string` | Returns complete HTTP response as string (status line + headers + blank line + body). |
+| `getStatusLine() const` | `std::string` | Returns HTTP status line (e.g., "HTTP/1.1 200 OK\r\n"). |
+| `getHeaders() const` | `std::string` | Returns all headers formatted as HTTP headers (e.g., "Content-Type: text/html\r\n"). |
+| `getBody() const` | `std::string` | Returns response body. |
+| `getStatusCode() const` | `int` | Returns HTTP status code. |
+| `getReasonPhrase(int status_code)` | `static std::string` | Returns standard reason phrase for status code (e.g., "OK" for 200, "Not Found" for 404). |
+| `getCurrentDate()` | `static std::string` | Returns current date in HTTP format (RFC 7231). |
+
+**Supported Status Codes:**
+
+| Code | Reason Phrase |
+|------|---------------|
+| 200 | OK |
+| 201 | Created |
+| 204 | No Content |
+| 301 | Moved Permanently |
+| 302 | Found |
+| 400 | Bad Request |
+| 403 | Forbidden |
+| 404 | Not Found |
+| 405 | Method Not Allowed |
+| 411 | Length Required |
+| 413 | Payload Too Large |
+| 414 | URI Too Long |
+| 431 | Request Header Fields Too Large |
+| 500 | Internal Server Error |
+| 501 | Not Implemented |
+| 505 | HTTP Version Not Supported |
+
+**Usage Example:**
+```cpp
+HttpResponse response;
+response.setStatus(200, "OK");
+response.setHeader("Content-Type", "text/html");
+response.setBody("<html><body>Hello</body></html>");
+response.setKeepAlive(true);
+
+std::string http_response = response.toString();
+// Sends: "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 32\r\nConnection: keep-alive\r\nDate: ...\r\nServer: webserv/1.0\r\n\r\n<html><body>Hello</body></html>"
+```
+
+**Features:**
+- Automatic Date and Server headers
+- Automatic Content-Length calculation
+- Support for both text and binary body data
+- Standard HTTP status codes with reason phrases
+- Proper HTTP/1.1 formatting
+
+---
+
+### RequestHandler
+
+Processes HTTP requests by matching them to server configuration, finding appropriate location blocks, serving files or directories, and generating responses.
+
+**Definition:**
+```cpp
+class RequestHandler {
+   public:
+    RequestHandler();
+    ~RequestHandler();
+
+    HttpResponse handleRequest(const HttpRequest& request,
+                               const ConfigParser& config,
+                               const std::string& server_host,
+                               int server_port);
+
+   private:
+    // ... implementation details
+};
+```
+
+**Public Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `RequestHandler()` | - | Default constructor. |
+| `~RequestHandler()` | - | Destructor. |
+| `handleRequest(...)` | `HttpResponse` | Processes HTTP request and returns appropriate response. Handles file serving, directory listing, error pages, etc. |
+
+**Responsibilities:**
+- Match requests to server configuration based on Host header and server address
+- Find appropriate location block for request path
+- Build file paths from request path and server/location root
+- Serve static files with proper content types
+- Handle directory requests (index files or autoindex)
+- Generate error pages (default or custom from config)
+- Validate path safety (prevent directory traversal)
+
+**Request Processing Flow:**
+```
+1. Find matching ServerConfig (by Host header and server address)
+2. Find matching Location block (longest path prefix match)
+3. Build file path (server root + location root + request path)
+4. Check path safety (prevent .. escapes)
+5. If directory:
+   - Try to serve index file
+   - If autoindex enabled: generate directory listing
+   - Otherwise: return 403 Forbidden
+6. If file:
+   - Read file and serve with appropriate Content-Type
+7. If not found:
+   - Generate error page (custom if configured, default otherwise)
+```
+
+**File Serving:**
+- Reads files in binary mode
+- Determines Content-Type from file extension
+- Returns 200 OK for successful file reads
+- Returns 404 Not Found if file doesn't exist
+- Returns 500 Internal Server Error on read errors
+
+**Directory Handling:**
+- Checks for index file (from server or location config)
+- If index file exists: serves it
+- If autoindex enabled: generates HTML directory listing
+- If autoindex disabled and no index: returns 403 Forbidden
+
+**Autoindex Generation:**
+- Creates HTML page with directory listing
+- Shows file names as links
+- Appends "/" to directory names
+- Sorts entries alphabetically
+- Returns 200 OK with text/html content
+
+**Error Pages:**
+- Checks for custom error page in server config (error_page directive)
+- If custom page exists and is readable: serves it
+- Otherwise: generates default error page with status code and reason phrase
+
+**Path Safety:**
+- Normalizes paths (removes //, /./, trailing slashes)
+- Ensures requested path is within server root
+- Prevents directory traversal attacks (../)
+- Returns 403 Forbidden for unsafe paths
+
+**Content Type Detection:**
+Supports common file types:
+- HTML: text/html
+- CSS: text/css
+- JavaScript: application/javascript
+- JSON: application/json
+- Images: image/png, image/jpeg, image/gif, image/svg+xml
+- Text: text/plain
+- PDF: application/pdf
+- XML: application/xml
+- Default: application/octet-stream
+
+**Usage Example:**
+```cpp
+RequestHandler handler;
+HttpResponse response = handler.handleRequest(request, config, "127.0.0.1", 8080);
+std::string http_response = response.toString();
+send(fd, http_response.c_str(), http_response.size(), 0);
+```
