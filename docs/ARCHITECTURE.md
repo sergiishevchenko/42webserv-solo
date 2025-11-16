@@ -47,6 +47,23 @@ This document provides a detailed diagram of how different components of the web
            │ (poll loop)  │        │  - Headers   │
            └──────────────┘        │  - Body/chunk│
                                    │  - Keep-alive│
+                                   └──────┬───────┘
+                                          │
+                                          ▼
+                                   ┌──────────────--┐
+                                   │ RequestHandler │
+                                   │  - Config match│
+                                   │  - File serve  │
+                                   │  - Autoindex   │
+                                   │  - Error pages │
+                                   └──────┬───────--┘
+                                          │
+                                          ▼
+                                   ┌──────────────┐
+                                   │ HttpResponse │
+                                   │  - Status    │
+                                   │  - Headers   │
+                                   │  - Body      │
                                    └──────────────┘
 ```
 
@@ -214,13 +231,16 @@ Server::acceptNewConnection()
 **Key Data Members:**
 - `int fd_` - Client socket file descriptor
 - `std::string client_ip_` - Client IP address
+- `int client_port_` - Client port number
+- `std::string server_host_` - Server host address
+- `int server_port_` - Server port number
 - `time_t last_activity_` - Timestamp of last activity
 - `RequestParser parser_` - Stateful HTTP/1.x parser instance
 
 **Key Methods:**
 - `updateActivity()` - Updates last_activity_ timestamp
 - `close()` - Closes connection file descriptor
-- `getFd()`, `getClientIp()`, `getLastActivity()` - Getters
+- `getFd()`, `getClientIp()`, `getClientPort()`, `getServerHost()`, `getServerPort()`, `getLastActivity()` - Getters
 - `RequestParser& getRequestParser()` - Accessor for parser instance
 - `void resetRequestParser()` - Clears parser state after a completed request
 
@@ -228,10 +248,13 @@ Server::acceptNewConnection()
 ```
 Creation (in Server::acceptNewConnection)
   │
-  ├─▶ new Connection(client_fd, client_ip)
+  ├─▶ new Connection(client_fd, client_ip, client_port, server_host, server_port)
   │     │
   │     ├─▶ fd_ = client_fd
   │     ├─▶ client_ip_ = client_ip
+  │     ├─▶ client_port_ = client_port
+  │     ├─▶ server_host_ = server_host
+  │     ├─▶ server_port_ = server_port
   │     └─▶ last_activity_ = time(NULL)
   │
   ├─▶ Stored in Server::connections_ map
@@ -357,24 +380,29 @@ ensuring every connection remembers where it left off between poll events.
 **Key Data Members:**
 - `std::vector<Socket*> listening_sockets_` - Listening sockets
 - `std::map<int, Connection*> connections_` - Active connections (fd → Connection*)
+- `std::map<int, std::pair<std::string, int> > socket_to_address_` - Socket to address mapping
 - `std::vector<struct pollfd> poll_fds_` - File descriptors for poll()
 - `bool running_` - Server running flag
 - `time_t connection_timeout_` - Connection timeout in seconds
+- `ConfigParser config_` - Server configuration
+- `RequestHandler request_handler_` - HTTP request handler
 
 **Key Methods:**
 
 #### `init(const ConfigParser& config)`
 ```
 Flow:
-  1. Get ServerConfig vector from ConfigParser
-  2. For each ServerConfig:
+  1. Store config in config_ member
+  2. Get ServerConfig vector from ConfigParser
+  3. For each ServerConfig:
      a. For each listen directive:
         - Create new Socket
         - Call Socket::bind(host, port)
         - Call Socket::listen()
         - Add to listening_sockets_
+        - Store address mapping in socket_to_address_
         - Register in poll_fds_ with POLLIN
-  3. Return success/failure
+  4. Return success/failure
 ```
 
 #### `run()` - Event Loop
@@ -455,7 +483,7 @@ Flow:
          • PARSE_ERROR → sendErrorResponse(fd, 400, parser.getError()); closeConnection(fd)
          • PARSE_COMPLETE:
             · request = parser.getRequest()
-            · sendParsedEcho(fd, request)   (placeholder response)
+            · handleHttpRequest(fd, request)   (processes request, serves files)
             · if request.keep_alive:
                   connection->resetRequestParser()
               else:
@@ -540,6 +568,122 @@ LOG_DEBUG() << "Debug message" << std::endl;
 LOG_INFO() << "Info message" << std::endl;
 LOG_WARNING() << "Warning message" << std::endl;
 LOG_ERROR() << "Error message" << std::endl;
+```
+
+---
+
+### 7. HttpResponse
+
+**Role:** HTTP response builder and formatter
+
+**Responsibilities:**
+- Build HTTP responses with status codes, headers, and body
+- Format responses according to HTTP/1.1 specification
+- Automatically add required headers (Date, Server, Content-Length)
+- Support both text and binary body data
+
+**Key Methods:**
+- `setStatus(int code, const std::string& reason)` - Set HTTP status code
+- `setHeader(const std::string& name, const std::string& value)` - Add/modify header
+- `setBody(const std::string& body)` - Set response body
+- `setKeepAlive(bool keep_alive)` - Set Connection header
+- `toString() const` - Get complete HTTP response string
+
+**Interaction Flow:**
+```
+RequestHandler
+  │
+  ├─▶ HttpResponse::setStatus(200, "OK")
+  ├─▶ HttpResponse::setHeader("Content-Type", "text/html")
+  ├─▶ HttpResponse::setBody(file_content)
+  ├─▶ HttpResponse::setKeepAlive(true)
+  │
+  └─▶ HttpResponse::toString()
+        │
+        └─▶ "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n..."
+```
+
+---
+
+### 8. RequestHandler
+
+**Role:** HTTP request processor and response generator
+
+**Responsibilities:**
+- Match requests to server configuration
+- Find appropriate location blocks
+- Serve static files with proper content types
+- Handle directory requests (index files, autoindex)
+- Generate error pages
+- Validate path safety
+
+**Key Methods:**
+- `handleRequest(...)` - Process request and return HttpResponse
+
+**Request Processing Flow:**
+```
+HttpRequest
+  │
+  ├─▶ RequestHandler::findServerConfig()
+  │     └─▶ Match by Host header and server address
+  │
+  ├─▶ RequestHandler::findLocation()
+  │     └─▶ Find longest path prefix match
+  │
+  ├─▶ RequestHandler::buildFilePath()
+  │     └─▶ Combine root + location root + request path
+  │
+  ├─▶ RequestHandler::isPathSafe()
+  │     └─▶ Validate path (prevent directory traversal)
+  │
+  └─▶ RequestHandler::serveFile() or serveDirectory()
+        │
+        ├─▶ If file: read and serve with Content-Type
+        ├─▶ If directory: serve index or generate autoindex
+        └─▶ If error: generate error page
+```
+
+**File Serving:**
+- Reads files in binary mode
+- Determines Content-Type from file extension
+- Returns appropriate HTTP status codes (200, 404, 403, 500)
+
+**Directory Handling:**
+- Checks for index file (from server or location config)
+- If autoindex enabled: generates HTML directory listing
+- If autoindex disabled and no index: returns 403 Forbidden
+
+**Error Pages:**
+- Checks for custom error page in config (error_page directive)
+- If custom page exists: serves it
+- Otherwise: generates default error page
+
+**Path Safety:**
+- Normalizes paths (removes //, /./, trailing slashes)
+- Ensures requested path is within server root
+- Prevents directory traversal attacks (../)
+- Returns 403 Forbidden for unsafe paths
+
+**Content Type Detection:**
+Supports common file types: HTML, CSS, JavaScript, JSON, images (PNG, JPEG, GIF, SVG), text, PDF, XML, and default application/octet-stream.
+
+**Integration with Server:**
+```
+Server::handleClientRead()
+  │
+  ├─▶ RequestParser::consume() → HttpRequest
+  │
+  └─▶ Server::handleHttpRequest()
+        │
+        └─▶ RequestHandler::handleRequest()
+              │
+              ├─▶ Find server config
+              ├─▶ Find location block
+              ├─▶ Build file path
+              ├─▶ Serve file/directory
+              └─▶ Return HttpResponse
+                    │
+                    └─▶ Server::sendAll() → Client
 ```
 
 ---
