@@ -245,6 +245,21 @@ Host: 127.0.0.1:8080
 
 ### Validate HTTP/1.x Parser
 
+**Prerequisites:**
+- Server must be running (start with `./webserv config/test_valid.conf` in one terminal)
+- Commands should be executed in a separate terminal
+- Ensure `nc` (netcat) is installed (usually pre-installed on macOS/Linux)
+
+**How to run tests:**
+1. Start the server in terminal 1:
+   ```bash
+   ./webserv config/test_valid.conf
+   ```
+
+2. Execute test commands in terminal 2 (copy and paste the commands below)
+
+**Note:** All commands use `printf` to send HTTP requests with proper `\r\n` line endings and pipe them to `nc` (netcat) which connects to the server and displays the response.
+
 1. **Persistent connection detection**
    ```bash
    printf 'GET /keep HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nConnection: keep-alive\r\n\r\n' | nc 127.0.0.1 8080
