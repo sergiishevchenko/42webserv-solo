@@ -239,9 +239,36 @@ telnet 127.0.0.1 8080
 # Send HTTP request
 GET / HTTP/1.1
 Host: 127.0.0.1:8080
-
-
 ```
+
+---
+
+### Validate HTTP/1.x Parser
+
+1. **Persistent connection detection**
+   ```bash
+   printf 'GET /keep HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nConnection: keep-alive\r\n\r\n' | nc 127.0.0.1 8080
+   ```
+   - Response includes `Connection: keep-alive`
+   - Keep the `nc` session open and issue a second request to confirm reuse
+
+2. **Content-Length body parsing**
+   ```bash
+   printf 'POST /echo HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nContent-Length: 11\r\n\r\nhello=world' | nc 127.0.0.1 8080
+   ```
+   - Response body reports `Content-Length: 11` and `Decoded-Body-Bytes: 11`
+
+3. **Chunked Transfer-Encoding**
+   ```bash
+   printf 'POST /chunk HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n' | nc 127.0.0.1 8080
+   ```
+   - Response body reports `Chunked: true` and `Decoded-Body-Bytes: 11`
+
+4. **Path normalization guard**
+   ```bash
+   printf 'GET /../../etc/passwd HTTP/1.1\r\nHost: 127.0.0.1:8080\r\n\r\n' | nc 127.0.0.1 8080
+   ```
+   - Server returns `400 Bad Request` with `Invalid request target`
 
 ---
 

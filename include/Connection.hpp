@@ -4,6 +4,8 @@
 #include <string>
 #include <ctime>
 
+#include "RequestParser.hpp"
+
 class Connection {
    public:
         Connection(int fd, const std::string& client_ip);
@@ -18,10 +20,14 @@ class Connection {
         void close();
         bool isValid() const { return fd_ >= 0; }
 
+        RequestParser& getRequestParser() { return parser_; }
+        void resetRequestParser() { parser_.reset(); }
+
    private:
         int fd_;
         std::string client_ip_;
         time_t last_activity_;
+        RequestParser parser_;
 
         Connection(const Connection&);
         Connection& operator=(const Connection&);

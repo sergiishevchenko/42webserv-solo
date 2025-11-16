@@ -8,6 +8,28 @@
 #include <cstring>
 #include <cerrno>
 #include <algorithm>
+#include <sstream>
+
+static std::string reasonPhrase(int status_code) {
+    switch (status_code) {
+        case 200:
+            return "OK";
+        case 400:
+            return "Bad Request";
+        case 411:
+            return "Length Required";
+        case 413:
+            return "Payload Too Large";
+        case 414:
+            return "URI Too Long";
+        case 431:
+            return "Request Header Fields Too Large";
+        case 500:
+            return "Internal Server Error";
+        default:
+            return "HTTP Status";
+    }
+}
 
 Server::Server() : running_(false), connection_timeout_(60) {}
 
@@ -133,7 +155,7 @@ void Server::handleClientRead(int fd) {
     conn->updateActivity();
 
     char buffer[4096];
-    ssize_t bytes_read = recv(fd, buffer, sizeof(buffer) - 1, 0);
+    ssize_t bytes_read = recv(fd, buffer, sizeof(buffer), 0);
 
     if (bytes_read < 0) {
         if (errno != EAGAIN && errno != EWOULDBLOCK) {
@@ -151,28 +173,31 @@ void Server::handleClientRead(int fd) {
         return;
     }
 
-    buffer[bytes_read] = '\0';
     LOG_DEBUG() << "Received " << bytes_read << " bytes from fd " << fd
                 << std::endl;
 
-    std::string response = "HTTP/1.1 200 OK\r\n";
-    response += "Content-Type: text/plain\r\n";
-    response += "Content-Length: 13\r\n";
-    response += "Connection: close\r\n";
-    response += "\r\n";
-    response += "Hello, World!";
+    RequestParser& parser = conn->getRequestParser();
+    RequestParser::ParseResult result =
+        parser.consume(buffer, static_cast<std::size_t>(bytes_read));
 
-    ssize_t bytes_sent = send(fd, response.c_str(), response.length(), 0);
-    if (bytes_sent < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            LOG_ERROR() << "send() failed for fd " << fd << ": "
-                        << strerror(errno) << std::endl;
+    if (result == RequestParser::PARSE_ERROR) {
+        LOG_WARNING() << "Malformed request from fd " << fd << ": "
+                      << parser.getError() << std::endl;
+        sendErrorResponse(fd, 400, parser.getError());
+        closeConnection(fd);
+        return;
+    }
+
+    if (result == RequestParser::PARSE_COMPLETE) {
+        const HttpRequest& request = parser.getRequest();
+        LOG_INFO() << "Parsed request " << request.method << " " << request.path
+                   << " (fd: " << fd << ")" << std::endl;
+        sendParsedEcho(fd, request);
+        if (request.keep_alive) {
+            conn->resetRequestParser();
+        } else {
             closeConnection(fd);
         }
-    } else {
-        LOG_DEBUG() << "Sent " << bytes_sent << " bytes to fd " << fd
-                    << std::endl;
-        closeConnection(fd);
     }
 }
 
@@ -307,4 +332,77 @@ void Server::stop() {
         delete listening_sockets_[i];
     }
     listening_sockets_.clear();
+}
+
+bool Server::sendAll(int fd, const std::string& data) {
+    std::size_t total = 0;
+    while (total < data.size()) {
+        ssize_t sent =
+            send(fd, data.c_str() + total, data.size() - total, 0);
+        if (sent < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            LOG_ERROR() << "send() failed for fd " << fd << ": "
+                        << strerror(errno) << std::endl;
+            return false;
+        }
+        total += static_cast<std::size_t>(sent);
+    }
+    return total == data.size();
+}
+
+void Server::sendParsedEcho(int fd, const HttpRequest& request) {
+    std::ostringstream body;
+    body << "Method: " << request.method << "\n";
+    body << "Path: " << request.path << "\n";
+    body << "Query: " << (request.query.empty() ? "-" : request.query) << "\n";
+    body << "Version: " << request.version << "\n";
+    body << "Keep-Alive: " << (request.keep_alive ? "true" : "false") << "\n";
+    body << "Content-Length: " << request.content_length << "\n";
+    body << "Chunked: " << (request.chunked ? "true" : "false") << "\n";
+    body << "Decoded-Body-Bytes: " << request.body.size() << "\n";
+    body << "Headers:\n";
+    for (std::map<std::string, std::string>::const_iterator it =
+             request.headers.begin();
+         it != request.headers.end(); ++it) {
+        body << "  " << it->first << ": " << it->second << "\n";
+    }
+
+    std::string body_str = body.str();
+    std::ostringstream response;
+    response << "HTTP/1.1 200 OK\r\n";
+    response << "Content-Type: text/plain\r\n";
+    response << "Content-Length: " << body_str.size() << "\r\n";
+    response << "Connection: "
+             << (request.keep_alive ? "keep-alive" : "close") << "\r\n";
+    response << "\r\n";
+    response << body_str;
+
+    if (!sendAll(fd, response.str())) {
+        closeConnection(fd);
+    }
+}
+
+void Server::sendErrorResponse(int fd, int status_code, const std::string& message) {
+    std::string phrase = reasonPhrase(status_code);
+    std::ostringstream body;
+    body << status_code << " " << phrase << "\n";
+    if (!message.empty()) {
+        body << message << "\n";
+    }
+    std::string body_str = body.str();
+
+    std::ostringstream response;
+    response << "HTTP/1.1 " << status_code << " " << phrase << "\r\n";
+    response << "Content-Type: text/plain\r\n";
+    response << "Content-Length: " << body_str.size() << "\r\n";
+    response << "Connection: close\r\n";
+    response << "\r\n";
+    response << body_str;
+
+    sendAll(fd, response.str());
 }

@@ -4,6 +4,7 @@
 #include "ConfigParser.hpp"
 #include "Socket.hpp"
 #include "Connection.hpp"
+#include "HttpRequest.hpp"
 #include <vector>
 #include <map>
 #include <poll.h>
@@ -34,6 +35,9 @@ class Server {
     void addPollFd(int fd, short events);
     void removePollFd(int fd);
     void updatePollFd(int fd, short events);
+    bool sendAll(int fd, const std::string& data);
+    void sendParsedEcho(int fd, const HttpRequest& request);
+    void sendErrorResponse(int fd, int status_code, const std::string& message);
 
     Server(const Server&);
     Server& operator=(const Server&);
