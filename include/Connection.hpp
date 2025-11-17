@@ -8,11 +8,15 @@
 
 class Connection {
    public:
-        Connection(int fd, const std::string& client_ip);
+        Connection(int fd, const std::string& client_ip, int client_port,
+                   const std::string& server_host, int server_port);
         ~Connection();
 
         int getFd() const { return fd_; }
         std::string getClientIp() const { return client_ip_; }
+        int getClientPort() const { return client_port_; }
+        std::string getServerHost() const { return server_host_; }
+        int getServerPort() const { return server_port_; }
         time_t getLastActivity() const { return last_activity_; }
 
         void updateActivity() { last_activity_ = time(NULL); }
@@ -26,6 +30,9 @@ class Connection {
    private:
         int fd_;
         std::string client_ip_;
+        int client_port_;
+        std::string server_host_;
+        int server_port_;
         time_t last_activity_;
         RequestParser parser_;
 
