@@ -1014,9 +1014,11 @@ class RequestHandler {
 **Responsibilities:**
 - Match requests to server configuration based on Host header and server address
 - Find appropriate location block for request path
+- Validate HTTP methods against location configuration
 - Build file paths from request path and server/location root
-- Serve static files with proper content types
-- Handle directory requests (index files or autoindex)
+- Handle GET requests: serve static files and directories
+- Handle POST requests: upload files with size limits and upload_store support
+- Handle DELETE requests: remove files with proper error handling
 - Generate error pages (default or custom from config)
 - Validate path safety (prevent directory traversal)
 
@@ -1024,24 +1026,63 @@ class RequestHandler {
 ```
 1. Find matching ServerConfig (by Host header and server address)
 2. Find matching Location block (longest path prefix match)
-3. Build file path (server root + location root + request path)
-4. Check path safety (prevent .. escapes)
-5. If directory:
-   - Try to serve index file
-   - If autoindex enabled: generate directory listing
-   - Otherwise: return 403 Forbidden
-6. If file:
-   - Read file and serve with appropriate Content-Type
-7. If not found:
-   - Generate error page (custom if configured, default otherwise)
+3. Validate HTTP method (check if allowed in location config)
+   - If not allowed: return 405 Method Not Allowed
+4. Route to appropriate handler based on method:
+   - GET → handleGet()
+   - POST → handlePost()
+   - DELETE → handleDelete()
+   - Other → return 501 Not Implemented
+5. Each handler:
+   - Builds file path (server root + location root + request path)
+   - Checks path safety (prevent .. escapes)
+   - Performs method-specific operations
+   - Returns appropriate HttpResponse
 ```
 
-**File Serving:**
+**HTTP Methods Supported:**
+
+| Method | Handler | Description |
+|--------|---------|-------------|
+| GET | `handleGet()` | Serves static files and directories |
+| POST | `handlePost()` | Uploads files with size validation |
+| DELETE | `handleDelete()` | Removes files from server |
+
+**Method Validation:**
+- Checks if method is allowed in location's `methods` set
+- If location has no methods specified, all methods are allowed
+- Returns 405 Method Not Allowed if method is not permitted
+
+**GET Method (handleGet):**
+- Serves static files and directories
 - Reads files in binary mode
 - Determines Content-Type from file extension
 - Returns 200 OK for successful file reads
 - Returns 404 Not Found if file doesn't exist
+- Returns 403 Forbidden for unsafe paths
 - Returns 500 Internal Server Error on read errors
+- Handles large files (non-blocking writes handled by Server class)
+
+**POST Method (handlePost):**
+- Validates request body size against `client_max_body_size`
+  - Returns 413 Payload Too Large if exceeded
+- Extracts filename from `Content-Disposition` header or uses request path
+- Sanitizes filename (removes invalid characters like `/`, `\`)
+- Uses `upload_store` from location config, or falls back to server root
+- Creates upload directory if it doesn't exist
+- Writes request body to file
+- Returns 201 Created with `Location` header on success
+- Returns 403 Forbidden for unsafe paths
+- Returns 500 Internal Server Error on file creation/write errors
+
+**DELETE Method (handleDelete):**
+- Validates that target is a file (not a directory)
+- Removes file using `unlink()` system call
+- Returns 204 No Content on successful deletion
+- Returns 403 Forbidden for directories or unsafe paths
+- Returns 404 Not Found if file doesn't exist
+- Returns 403 Forbidden if permission denied
+- Returns 500 Internal Server Error on other errors
 
 **Directory Handling:**
 - Checks for index file (from server or location config)
@@ -1079,10 +1120,33 @@ Supports common file types:
 - XML: application/xml
 - Default: application/octet-stream
 
+**Private Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `isMethodAllowed(const std::string& method, const Location* location)` | `bool` | Checks if HTTP method is allowed in location config. Returns `true` if location has no methods specified or method is in the methods set. |
+| `handleGet(const HttpRequest& request, const ServerConfig& server, const Location* location)` | `HttpResponse` | Handles GET requests: serves files or directories. |
+| `handlePost(const HttpRequest& request, const ServerConfig& server, const Location* location)` | `HttpResponse` | Handles POST requests: uploads files with validation. |
+| `handleDelete(const HttpRequest& request, const ServerConfig& server, const Location* location)` | `HttpResponse` | Handles DELETE requests: removes files. |
+
 **Usage Example:**
 ```cpp
 RequestHandler handler;
 HttpResponse response = handler.handleRequest(request, config, "127.0.0.1", 8080);
 std::string http_response = response.toString();
 send(fd, http_response.c_str(), http_response.size(), 0);
+```
+
+**POST Request Example:**
+```cpp
+// Client sends POST with body and Content-Disposition header
+// RequestHandler validates size, extracts filename, saves to upload_store
+// Returns 201 Created with Location header
+```
+
+**DELETE Request Example:**
+```cpp
+// Client sends DELETE /path/to/file
+// RequestHandler validates path, checks if file exists, removes it
+// Returns 204 No Content on success
 ```
