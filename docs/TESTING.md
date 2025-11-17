@@ -642,10 +642,10 @@ Use this checklist to verify all functionality:
 # GET request
 curl -X GET http://127.0.0.1:8080/
 
-# POST request (will be handled in future stages)
+# POST request
 curl -X POST http://127.0.0.1:8080/ -d "test=data"
 
-# DELETE request (will be handled in future stages)
+# DELETE request
 curl -X DELETE http://127.0.0.1:8080/test
 ```
 

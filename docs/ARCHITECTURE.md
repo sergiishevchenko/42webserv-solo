@@ -502,7 +502,7 @@ Flow:
 - `sendParsedEcho(int fd, const HttpRequest& request)`  
   Builds a text/plain 200 response enumerating method, normalized path, query,
   protocol version, keep-alive flag, body lengths, chunked flag, and all parsed
-  headers. Used as an interim handler until full Stage 4 response logic arrives.
+  headers.
 
 - `sendErrorResponse(int fd, int status_code, const std::string& message)`  
   Generates a minimal error body (`<code> <reason>\n<details>\n`) and always
