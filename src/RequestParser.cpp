@@ -43,7 +43,8 @@ RequestParser::RequestParser()
       last_header_name_(),
       content_length_remaining_(0),
       current_chunk_size_(0),
-      chunk_bytes_remaining_(0) {}
+      chunk_bytes_remaining_(0),
+      max_body_size_(0) {}
 
 void RequestParser::reset() {
     state_ = STATE_REQUEST_LINE;
@@ -54,6 +55,7 @@ void RequestParser::reset() {
     content_length_remaining_ = 0;
     current_chunk_size_ = 0;
     chunk_bytes_remaining_ = 0;
+    max_body_size_ = 0;
 }
 
 void RequestParser::fail(const std::string& message) {
@@ -109,9 +111,17 @@ RequestParser::ParseResult RequestParser::consume(const char* data, std::size_t 
             if (buffer_.empty()) {
                 break;
             }
+            if (max_body_size_ > 0 && request_.body.size() >= max_body_size_) {
+                fail("Request body too large");
+                break;
+            }
             std::size_t to_copy = buffer_.size();
             if (to_copy > content_length_remaining_) {
                 to_copy = content_length_remaining_;
+            }
+            if (max_body_size_ > 0 && request_.body.size() + to_copy > max_body_size_) {
+                fail("Request body too large");
+                break;
             }
             request_.body.append(buffer_, 0, to_copy);
             buffer_.erase(0, to_copy);
@@ -138,12 +148,26 @@ RequestParser::ParseResult RequestParser::consume(const char* data, std::size_t 
                 state_ = STATE_BODY_CHUNK_DATA;
             }
         } else if (state_ == STATE_BODY_CHUNK_DATA) {
+            if (max_body_size_ > 0 && request_.body.size() >= max_body_size_) {
+                fail("Request body too large");
+                break;
+            }
             if (buffer_.size() < chunk_bytes_remaining_) {
+                std::size_t to_append = buffer_.size();
+                if (max_body_size_ > 0 && request_.body.size() + to_append > max_body_size_) {
+                    fail("Request body too large");
+                    break;
+                }
                 request_.body.append(buffer_);
                 chunk_bytes_remaining_ -= buffer_.size();
                 buffer_.clear();
                 break;
             } else {
+                std::size_t to_append = chunk_bytes_remaining_;
+                if (max_body_size_ > 0 && request_.body.size() + to_append > max_body_size_) {
+                    fail("Request body too large");
+                    break;
+                }
                 request_.body.append(buffer_, 0, chunk_bytes_remaining_);
                 buffer_.erase(0, chunk_bytes_remaining_);
                 chunk_bytes_remaining_ = 0;
@@ -271,6 +295,10 @@ bool RequestParser::finalizeHeaders() {
             return false;
         }
         request_.content_length = static_cast<std::size_t>(length);
+        if (max_body_size_ > 0 && request_.content_length > max_body_size_) {
+            fail("Request body too large");
+            return false;
+        }
         content_length_remaining_ = request_.content_length;
     } else {
         request_.content_length = 0;
