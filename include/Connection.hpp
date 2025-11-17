@@ -18,8 +18,11 @@ class Connection {
         std::string getServerHost() const { return server_host_; }
         int getServerPort() const { return server_port_; }
         time_t getLastActivity() const { return last_activity_; }
+        time_t getRequestStartTime() const { return request_start_time_; }
 
         void updateActivity() { last_activity_ = time(NULL); }
+        void startRequest() { request_start_time_ = time(NULL); }
+        void resetRequest() { request_start_time_ = 0; }
 
         void close();
         bool isValid() const { return fd_ >= 0; }
@@ -34,6 +37,7 @@ class Connection {
         std::string server_host_;
         int server_port_;
         time_t last_activity_;
+        time_t request_start_time_;
         RequestParser parser_;
 
         Connection(const Connection&);
