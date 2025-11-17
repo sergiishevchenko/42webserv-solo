@@ -16,6 +16,7 @@ class RequestParser {
     const HttpRequest& getRequest() const { return request_; }
     const std::string& getError() const { return error_message_; }
     void reset();
+    void setMaxBodySize(std::size_t max_size) { max_body_size_ = max_size; }
 
    private:
     enum State {
@@ -38,6 +39,7 @@ class RequestParser {
     std::size_t content_length_remaining_;
     std::size_t current_chunk_size_;
     std::size_t chunk_bytes_remaining_;
+    std::size_t max_body_size_;
 
     bool parseRequestLine(const std::string& line);
     bool parseHeaderLine(const std::string& line);
