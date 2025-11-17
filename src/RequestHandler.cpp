@@ -18,13 +18,6 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request, const Con
                                             const std::string& server_host, int server_port) {
     HttpResponse response;
 
-    if (request.method != "GET") {
-        response.setStatus(501, "Not Implemented");
-        response.setBody("Method not implemented: " + request.method);
-        response.setKeepAlive(request.keep_alive);
-        return response;
-    }
-
     const ServerConfig* server = findServerConfig(request, config, server_host, server_port);
     if (!server) {
         response.setStatus(500, "Internal Server Error");
@@ -34,20 +27,23 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request, const Con
     }
 
     const Location* location = findLocation(request, *server);
-    std::string file_path = buildFilePath(request, *server, location);
 
-    if (!isPathSafe(file_path, server->root)) {
-        response = generateErrorPage(403, *server);
+    if (!isMethodAllowed(request.method, location)) {
+        response.setStatus(405, "Method Not Allowed");
+        response.setBody("Method not allowed: " + request.method);
         response.setKeepAlive(request.keep_alive);
         return response;
     }
 
-    if (isDirectory(file_path)) {
-        response = serveDirectory(file_path, request.path, *server, location);
-    } else if (isFile(file_path)) {
-        response = serveFile(file_path);
+    if (request.method == "GET") {
+        response = handleGet(request, *server, location);
+    } else if (request.method == "POST") {
+        response = handlePost(request, *server, location);
+    } else if (request.method == "DELETE") {
+        response = handleDelete(request, *server, location);
     } else {
-        response = generateErrorPage(404, *server);
+        response.setStatus(501, "Not Implemented");
+        response.setBody("Method not implemented: " + request.method);
     }
 
     response.setKeepAlive(request.keep_alive);
@@ -361,4 +357,159 @@ std::string RequestHandler::getContentType(const std::string& file_path) {
     } else {
         return "application/octet-stream";
     }
+}
+
+bool RequestHandler::isMethodAllowed(const std::string& method, const Location* location) {
+    if (!location || location->methods.empty()) {
+        return true;
+    }
+    return location->methods.find(method) != location->methods.end();
+}
+
+HttpResponse RequestHandler::handleGet(const HttpRequest& request, const ServerConfig& server, const Location* location) {
+    std::string file_path = buildFilePath(request, server, location);
+
+    if (!isPathSafe(file_path, server.root)) {
+        return generateErrorPage(403, server);
+    }
+
+    if (isDirectory(file_path)) {
+        return serveDirectory(file_path, request.path, server, location);
+    } else if (isFile(file_path)) {
+        return serveFile(file_path);
+    } else {
+        return generateErrorPage(404, server);
+    }
+}
+
+HttpResponse RequestHandler::handlePost(const HttpRequest& request, const ServerConfig& server, const Location* location) {
+    HttpResponse response;
+
+    if (request.body.size() > server.client_max_body_size) {
+        response = generateErrorPage(413, server);
+        return response;
+    }
+
+    std::string file_path = buildFilePath(request, server, location);
+
+    if (!isPathSafe(file_path, server.root)) {
+        response = generateErrorPage(403, server);
+        return response;
+    }
+
+    std::string upload_dir;
+    if (location && !location->upload_store.empty()) {
+        upload_dir = normalizePath(location->upload_store);
+    } else {
+        upload_dir = normalizePath(server.root);
+    }
+
+    if (!isPathSafe(upload_dir, server.root)) {
+        response = generateErrorPage(403, server);
+        return response;
+    }
+
+    if (!isDirectory(upload_dir)) {
+        if (mkdir(upload_dir.c_str(), 0755) != 0) {
+            response.setStatus(500, "Internal Server Error");
+            response.setBody("Failed to create upload directory");
+            return response;
+        }
+    }
+
+    std::string filename;
+    std::string content_disposition = request.getHeader("Content-Disposition");
+    if (!content_disposition.empty()) {
+        size_t filename_pos = content_disposition.find("filename=");
+        if (filename_pos != std::string::npos) {
+            filename = content_disposition.substr(filename_pos + 9);
+            size_t end_pos = filename.find_first_of(";\"");
+            if (end_pos != std::string::npos) {
+                filename = filename.substr(0, end_pos);
+            }
+            if (filename[0] == '"' && filename[filename.length() - 1] == '"') {
+                filename = filename.substr(1, filename.length() - 2);
+            }
+        }
+    }
+
+    if (filename.empty()) {
+        std::string path_part = request.path;
+        size_t last_slash = path_part.find_last_of('/');
+        if (last_slash != std::string::npos && last_slash < path_part.length() - 1) {
+            filename = path_part.substr(last_slash + 1);
+        }
+        if (filename.empty()) {
+            filename = "upload_file";
+        }
+    }
+
+    size_t invalid_char = filename.find_first_of("/\\");
+    while (invalid_char != std::string::npos) {
+        filename[invalid_char] = '_';
+        invalid_char = filename.find_first_of("/\\", invalid_char + 1);
+    }
+
+    std::string upload_path = normalizePath(upload_dir + "/" + filename);
+    if (!isPathSafe(upload_path, server.root)) {
+        response = generateErrorPage(403, server);
+        return response;
+    }
+
+    std::ofstream file(upload_path.c_str(), std::ios::binary);
+    if (!file.is_open()) {
+        response.setStatus(500, "Internal Server Error");
+        response.setBody("Failed to create upload file");
+        return response;
+    }
+
+    file.write(request.body.c_str(), request.body.size());
+    file.close();
+
+    if (!file.good()) {
+        response.setStatus(500, "Internal Server Error");
+        response.setBody("Failed to write upload file");
+        return response;
+    }
+
+    response.setStatus(201, "Created");
+    response.setHeader("Location", request.path + "/" + filename);
+    response.setBody("File uploaded successfully: " + filename);
+    return response;
+}
+
+HttpResponse RequestHandler::handleDelete(const HttpRequest& request, const ServerConfig& server, const Location* location) {
+    HttpResponse response;
+
+    std::string file_path = buildFilePath(request, server, location);
+
+    if (!isPathSafe(file_path, server.root)) {
+        response = generateErrorPage(403, server);
+        return response;
+    }
+
+    if (isDirectory(file_path)) {
+        response = generateErrorPage(403, server);
+        return response;
+    }
+
+    if (!isFile(file_path)) {
+        response = generateErrorPage(404, server);
+        return response;
+    }
+
+    if (unlink(file_path.c_str()) != 0) {
+        if (errno == EACCES || errno == EPERM) {
+            response = generateErrorPage(403, server);
+        } else {
+            response.setStatus(500, "Internal Server Error");
+            response.setBody("Failed to delete file");
+        }
+        return response;
+    }
+
+    response.setStatus(204, "No Content");
+    response.setHeader("Content-Length", "0");
+    response.setBody("");
+    return response;
 }

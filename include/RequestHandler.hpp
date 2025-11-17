@@ -29,6 +29,10 @@ class RequestHandler {
     std::string normalizePath(const std::string& path);
     bool isPathSafe(const std::string& path, const std::string& root);
     std::string getContentType(const std::string& file_path);
+    bool isMethodAllowed(const std::string& method, const Location* location);
+    HttpResponse handleGet(const HttpRequest& request, const ServerConfig& server, const Location* location);
+    HttpResponse handlePost(const HttpRequest& request, const ServerConfig& server, const Location* location);
+    HttpResponse handleDelete(const HttpRequest& request, const ServerConfig& server, const Location* location);
 
     RequestHandler(const RequestHandler&);
     RequestHandler& operator=(const RequestHandler&);
