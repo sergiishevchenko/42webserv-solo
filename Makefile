@@ -23,7 +23,9 @@ SRCS		:= $(SRC_DIR)/main.cpp \
 			   $(SRC_DIR)/Socket.cpp \
 			   $(SRC_DIR)/Connection.cpp \
 			   $(SRC_DIR)/HttpRequest.cpp \
+			   $(SRC_DIR)/HttpResponse.cpp \
 			   $(SRC_DIR)/RequestParser.cpp \
+			   $(SRC_DIR)/RequestHandler.cpp \
 			   $(SRC_DIR)/Server.cpp
 OBJS		:= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 
