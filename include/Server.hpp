@@ -26,6 +26,8 @@ class Server {
     std::vector<struct pollfd> poll_fds_;
     bool running_;
     time_t connection_timeout_;
+    time_t request_timeout_;
+    size_t max_connections_;
     ConfigParser config_;
     RequestHandler request_handler_;
 

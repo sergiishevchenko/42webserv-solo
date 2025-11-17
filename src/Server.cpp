@@ -31,7 +31,7 @@ static std::string reasonPhrase(int status_code) {
     }
 }
 
-Server::Server() : running_(false), connection_timeout_(60) {}
+Server::Server() : running_(false), connection_timeout_(60), request_timeout_(30), max_connections_(1000) {}
 
 Server::~Server() { stop(); }
 
@@ -152,8 +152,28 @@ void Server::acceptNewConnection(Socket* socket) {
         server_port = addr_it->second.second;
     }
 
+    if (connections_.size() >= max_connections_) {
+        LOG_WARNING() << "Maximum connections limit reached, rejecting connection from "
+                      << client_ip << ":" << client_port << std::endl;
+        ::close(client_fd);
+        return;
+    }
+
     Connection* conn = new Connection(client_fd, client_ip, client_port,
                                       server_host, server_port);
+    
+    size_t max_body_size = 1048576;
+    const std::vector<ServerConfig>& servers = config_.getServers();
+    if (!servers.empty()) {
+        max_body_size = servers[0].client_max_body_size;
+        for (size_t i = 0; i < servers.size(); ++i) {
+            if (servers[i].client_max_body_size > max_body_size) {
+                max_body_size = servers[i].client_max_body_size;
+            }
+        }
+    }
+    conn->getRequestParser().setMaxBodySize(max_body_size);
+    
     connections_[client_fd] = conn;
     LOG_INFO() << "New connection from " << client_ip << ":" << client_port
                << " (fd: " << client_fd << ")" << std::endl;
@@ -191,13 +211,22 @@ void Server::handleClientRead(int fd) {
                 << std::endl;
 
     RequestParser& parser = conn->getRequestParser();
+    
+    if (parser.getRequest().method.empty() && parser.getRequest().path.empty()) {
+        conn->startRequest();
+    }
+    
     RequestParser::ParseResult result =
         parser.consume(buffer, static_cast<std::size_t>(bytes_read));
 
     if (result == RequestParser::PARSE_ERROR) {
         LOG_WARNING() << "Malformed request from fd " << fd << ": "
                       << parser.getError() << std::endl;
-        sendErrorResponse(fd, 400, parser.getError());
+        int status_code = 400;
+        if (parser.getError().find("too large") != std::string::npos) {
+            status_code = 413;
+        }
+        sendErrorResponse(fd, status_code, parser.getError());
         closeConnection(fd);
         return;
     }
@@ -208,6 +237,7 @@ void Server::handleClientRead(int fd) {
                    << " (fd: " << fd << ")" << std::endl;
         handleHttpRequest(fd, request);
         if (request.keep_alive) {
+            conn->resetRequest();
             conn->resetRequestParser();
         } else {
             closeConnection(fd);
@@ -238,14 +268,26 @@ void Server::cleanupTimedOutConnections() {
     std::vector<int> to_close;
 
     for (std::map<int, Connection*>::iterator it = connections_.begin(); it != connections_.end(); ++it) {
-        if (now - it->second->getLastActivity() > connection_timeout_) {
+        Connection* conn = it->second;
+        bool should_close = false;
+        
+        if (now - conn->getLastActivity() > connection_timeout_) {
+            LOG_INFO() << "Closing idle connection (fd: " << it->first << ")"
+                       << std::endl;
+            should_close = true;
+        } else if (conn->getRequestStartTime() > 0 && 
+                   now - conn->getRequestStartTime() > request_timeout_) {
+            LOG_INFO() << "Closing request timeout connection (fd: " << it->first << ")"
+                       << std::endl;
+            should_close = true;
+        }
+        
+        if (should_close) {
             to_close.push_back(it->first);
         }
     }
 
     for (size_t i = 0; i < to_close.size(); ++i) {
-        LOG_INFO() << "Closing timed out connection (fd: " << to_close[i] << ")"
-                   << std::endl;
         closeConnection(to_close[i]);
     }
 }
