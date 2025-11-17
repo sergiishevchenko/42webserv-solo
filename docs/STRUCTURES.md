@@ -398,7 +398,7 @@ if (client_fd >= 0) {
 
 ### Connection
 
-Manages a client connection. Tracks the client's file descriptor, IP address, and last activity time for timeout handling.
+Manages a client connection. Tracks the client's file descriptor, IP address, last activity time, and request start time for timeout handling.
 
 **Definition:**
 ```cpp
@@ -414,7 +414,10 @@ class Connection {
     std::string getServerHost() const;
     int getServerPort() const;
     time_t getLastActivity() const;
+    time_t getRequestStartTime() const;
     void updateActivity();
+    void startRequest();
+    void resetRequest();
 
     void close();
     bool isValid() const;
@@ -429,6 +432,7 @@ class Connection {
     std::string server_host_;
     int server_port_;
     time_t last_activity_;
+    time_t request_start_time_;
     RequestParser parser_;
 };
 ```
@@ -442,7 +446,10 @@ class Connection {
 | `getFd() const` | `int` | Returns the file descriptor of the client socket. |
 | `getClientIp() const` | `std::string` | Returns the IP address of the client. |
 | `getLastActivity() const` | `time_t` | Returns the timestamp of the last activity on this connection. |
+| `getRequestStartTime() const` | `time_t` | Returns the timestamp when the current request started (0 if no active request). |
 | `updateActivity()` | `void` | Updates the last activity timestamp to the current time. |
+| `startRequest()` | `void` | Marks the start of a new request by setting `request_start_time_` to current time. |
+| `resetRequest()` | `void` | Resets the request start time (sets to 0) when request is completed. |
 | `close()` | `void` | Closes the connection by closing the file descriptor. |
 | `isValid() const` | `bool` | Returns `true` if the connection is valid (fd >= 0). |
 
@@ -469,9 +476,12 @@ if (client_fd >= 0) {
 ```
 
 **Timeout Handling:**
-- The `last_activity_` field is used to track when the connection was last active
-- The Server class uses this to implement connection timeouts
+- The `last_activity_` field is used to track when the connection was last active (for idle timeout)
+- The `request_start_time_` field tracks when a request started processing (for request timeout)
+- The Server class uses both to implement connection and request timeouts
 - Call `updateActivity()` whenever data is sent or received on the connection
+- Call `startRequest()` when a new request begins parsing
+- Call `resetRequest()` when a request is completed
 
 ---
 
@@ -496,6 +506,8 @@ class Server {
     std::vector<struct pollfd> poll_fds_;
     bool running_;
     time_t connection_timeout_;
+    time_t request_timeout_;
+    size_t max_connections_;
 
     void setupPollFds();
     void handlePollEvents();
@@ -526,11 +538,11 @@ class Server {
 |--------|-------------|-------------|
 | `setupPollFds()` | `void` | Rebuilds the `poll_fds_` vector from all listening sockets and active connections. |
 | `handlePollEvents()` | `void` | Processes events from `poll()`. Handles new connections, client reads, and client writes. |
-| `acceptNewConnection(Socket* socket)` | `void` | Accepts a new connection from a listening socket and adds it to the connections map. |
-| `handleClientRead(int fd)` | `void` | Handles read events from a client connection. Currently sends a simple "Hello, World!" response. |
+| `acceptNewConnection(Socket* socket)` | `void` | Accepts a new connection from a listening socket. Rejects connection if `max_connections_` limit is reached. Sets `client_max_body_size` from config to RequestParser. |
+| `handleClientRead(int fd)` | `void` | Handles read events from a client connection. Parses HTTP requests and tracks request start time for timeout handling. |
 | `handleClientWrite(int fd)` | `void` | Handles write events from a client connection. Updates activity timestamp. |
 | `closeConnection(int fd)` | `void` | Closes a client connection and removes it from the connections map and poll_fds. |
-| `cleanupTimedOutConnections()` | `void` | Closes connections that have been idle for longer than `connection_timeout_` seconds. |
+| `cleanupTimedOutConnections()` | `void` | Closes connections that exceed `connection_timeout_` (idle) or `request_timeout_` (request processing) limits. |
 | `addPollFd(int fd, short events)` | `void` | Adds a file descriptor to the poll_fds vector. |
 | `removePollFd(int fd)` | `void` | Removes a file descriptor from the poll_fds vector. |
 | `updatePollFd(int fd, short events)` | `void` | Updates the events mask for a file descriptor in poll_fds. |
@@ -539,7 +551,10 @@ class Server {
 - Non-blocking I/O using `poll()` system call
 - Multiple listening sockets (multiple ports/interfaces)
 - Connection management with activity tracking
-- Automatic timeout handling for idle connections
+- Automatic timeout handling for idle connections (60 seconds default)
+- Request timeout handling (30 seconds default)
+- Maximum connections limit (1000 default) to prevent resource exhaustion
+- Body size validation during request parsing
 - Event-driven architecture
 - Graceful shutdown support
 
@@ -552,6 +567,8 @@ class Server {
 | `poll_fds_` | `std::vector<struct pollfd>` | File descriptors for `poll()` system call |
 | `running_` | `bool` | Flag indicating if the server is running |
 | `connection_timeout_` | `time_t` | Timeout in seconds for idle connections (default: 60) |
+| `request_timeout_` | `time_t` | Timeout in seconds for processing a single request (default: 30) |
+| `max_connections_` | `size_t` | Maximum number of simultaneous connections (default: 1000) |
 
 **Usage Example:**
 ```cpp
@@ -1150,3 +1167,130 @@ send(fd, http_response.c_str(), http_response.size(), 0);
 // RequestHandler validates path, checks if file exists, removes it
 // Returns 204 No Content on success
 ```
+
+---
+
+### RequestParser
+
+Parses HTTP/1.1 requests from raw byte streams. Handles request line, headers, and body parsing with support for Content-Length and Transfer-Encoding: chunked. Validates body size against `client_max_body_size` limit.
+
+**Definition:**
+```cpp
+class RequestParser {
+   public:
+    enum ParseResult { PARSE_INCOMPLETE, PARSE_COMPLETE, PARSE_ERROR };
+
+    RequestParser();
+    ParseResult consume(const char* data, std::size_t length);
+    const HttpRequest& getRequest() const;
+    const std::string& getError() const;
+    void reset();
+    void setMaxBodySize(std::size_t max_size);
+
+   private:
+    // ... implementation details
+};
+```
+
+**Public Methods:**
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `RequestParser()` | - | Constructor. Initializes parser in `STATE_REQUEST_LINE` state. |
+| `consume(const char* data, std::size_t length)` | `ParseResult` | Processes incoming data and parses HTTP request. Returns `PARSE_INCOMPLETE` if more data needed, `PARSE_COMPLETE` if request fully parsed, `PARSE_ERROR` on error. |
+| `getRequest() const` | `const HttpRequest&` | Returns the parsed HTTP request object. |
+| `getError() const` | `const std::string&` | Returns error message if parsing failed. |
+| `reset()` | `void` | Resets parser to initial state for parsing a new request. |
+| `setMaxBodySize(std::size_t max_size)` | `void` | Sets maximum allowed body size. If body exceeds this limit during parsing, returns `PARSE_ERROR` with "Request body too large" message. Set to 0 to disable limit. |
+
+**Parsing States:**
+- `STATE_REQUEST_LINE` - Parsing HTTP request line (method, path, version)
+- `STATE_HEADERS` - Parsing HTTP headers
+- `STATE_BODY_CONTENT_LENGTH` - Reading body with Content-Length
+- `STATE_BODY_CHUNK_SIZE` - Reading chunk size in chunked encoding
+- `STATE_BODY_CHUNK_DATA` - Reading chunk data
+- `STATE_BODY_CHUNK_CRLF` - Reading chunk delimiter
+- `STATE_BODY_CHUNK_TRAILERS` - Reading chunk trailers
+- `STATE_COMPLETE` - Request fully parsed
+- `STATE_ERROR` - Parsing error occurred
+
+**Body Size Validation:**
+- Validates `Content-Length` header value against `max_body_size_` in `finalizeHeaders()`
+- Validates body size incrementally during Content-Length body parsing
+- Validates body size incrementally during chunked body parsing
+- Returns `PARSE_ERROR` with "Request body too large" message if limit exceeded
+- Server converts this error to HTTP 413 Payload Too Large response
+
+**Supported Features:**
+- HTTP/1.1 request line parsing
+- Header parsing with continuation lines
+- Content-Length body parsing
+- Transfer-Encoding: chunked body parsing
+- Path normalization and query string extraction
+- Keep-alive detection
+- Body size validation
+
+**Usage Example:**
+```cpp
+RequestParser parser;
+parser.setMaxBodySize(10485760); // 10 MB limit
+
+char buffer[4096];
+ssize_t bytes_read = recv(fd, buffer, sizeof(buffer), 0);
+RequestParser::ParseResult result = parser.consume(buffer, bytes_read);
+
+if (result == RequestParser::PARSE_COMPLETE) {
+    const HttpRequest& request = parser.getRequest();
+    // Process request...
+} else if (result == RequestParser::PARSE_ERROR) {
+    std::string error = parser.getError();
+    // Handle error (e.g., send 413 if "too large")
+}
+```
+
+**Error Handling:**
+- Returns `PARSE_ERROR` for malformed requests
+- Returns `PARSE_ERROR` if body size exceeds `max_body_size_`
+- Error message available via `getError()`
+- Server should send appropriate HTTP error response (400 Bad Request or 413 Payload Too Large)
+
+---
+
+## Limits and Timeouts
+
+The webserv implements several limits and timeouts to ensure robustness and prevent resource exhaustion:
+
+### Body Size Limits
+
+- **Configuration**: `client_max_body_size` in server config (default: 1 MB)
+- **Validation Points**:
+  - During request parsing in `RequestParser::finalizeHeaders()` (Content-Length header)
+  - During Content-Length body parsing
+  - During chunked body parsing
+  - In `RequestHandler::handlePost()` before file upload
+- **Response**: HTTP 413 Payload Too Large
+
+### Connection Limits
+
+- **Maximum Connections**: 1000 simultaneous connections (default)
+- **Behavior**: New connections are rejected when limit is reached
+- **Location**: `Server::acceptNewConnection()`
+
+### Timeouts
+
+1. **Idle Connection Timeout**: 60 seconds (default)
+   - Tracks last activity time (`Connection::last_activity_`)
+   - Closes connections that have been idle for longer than timeout
+   - Location: `Server::cleanupTimedOutConnections()`
+
+2. **Request Processing Timeout**: 30 seconds (default)
+   - Tracks request start time (`Connection::request_start_time_`)
+   - Closes connections if request processing exceeds timeout
+   - Location: `Server::cleanupTimedOutConnections()`
+
+### Timeout Handling
+
+- Timeouts are checked in `Server::cleanupTimedOutConnections()` during each event loop iteration
+- Both idle and request timeouts are checked for each connection
+- Connections exceeding either timeout are automatically closed
+- No hanging: every state has a timeout and error path
