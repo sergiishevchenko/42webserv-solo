@@ -14,7 +14,8 @@ This document describes how to test the webserv project, including configuration
 6. [Connection Testing](#connection-testing)
 7. [Timeout Testing](#timeout-testing)
 8. [Multiple Ports Testing](#multiple-ports-testing)
-9. [Troubleshooting](#troubleshooting)
+9. [HTTP Method Testing](#http-method-testing)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -634,20 +635,426 @@ Use this checklist to verify all functionality:
 
 ---
 
-## Advanced Testing
+## HTTP Method Testing
 
-### Test with Different HTTP Methods
+This section provides comprehensive tests for GET, POST, and DELETE HTTP methods.
+
+**Prerequisites:**
+- Server must be running (start with `./webserv config/test_valid.conf` in one terminal)
+- Commands should be executed in a separate terminal
+- Ensure test files exist in the `www` directory
+
+---
+
+### GET Method Tests
+
+#### Basic GET Request
 
 ```bash
-# GET request
-curl -X GET http://127.0.0.1:8080/
-
-# POST request
-curl -X POST http://127.0.0.1:8080/ -d "test=data"
-
-# DELETE request
-curl -X DELETE http://127.0.0.1:8080/test
+# Simple GET request to root
+curl -v http://127.0.0.1:8080/
 ```
+
+**Expected Output:**
+```
+< HTTP/1.1 200 OK
+< Content-Type: text/html
+< Content-Length: <size>
+< Connection: close
+< 
+<html content>
+```
+
+#### GET Request for Existing File
+
+```bash
+# Request a specific file
+curl -v http://127.0.0.1:8080/index.html
+```
+
+**Expected Behavior:**
+- Returns `200 OK` if file exists
+- Returns file content with appropriate `Content-Type` header
+- `Content-Length` matches file size
+
+#### GET Request for Non-Existent File
+
+```bash
+# Request a file that doesn't exist
+curl -v http://127.0.0.1:8080/nonexistent.html
+```
+
+**Expected Output:**
+```
+< HTTP/1.1 404 Not Found
+< Content-Type: text/plain
+< 
+404 Not Found
+```
+
+#### GET Request for Directory (with index file)
+
+```bash
+# Request a directory that has an index file
+curl -v http://127.0.0.1:8080/
+```
+
+**Expected Behavior:**
+- If `index.html` exists in root directory, returns the index file
+- Returns `200 OK` with index file content
+
+#### GET Request for Directory (autoindex enabled)
+
+```bash
+# Request a directory with autoindex enabled (e.g., /uploads)
+curl -v http://127.0.0.1:8080/uploads/
+```
+
+**Expected Behavior:**
+- If autoindex is enabled in location config, returns HTML directory listing
+- Returns `200 OK` with HTML listing of directory contents
+- Returns `403 Forbidden` if autoindex is disabled
+
+#### GET Request with Query String
+
+```bash
+# GET request with query parameters
+curl -v "http://127.0.0.1:8080/?param1=value1&param2=value2"
+```
+
+**Expected Behavior:**
+- Query string is preserved in request path
+- Server processes request normally (query string handling depends on implementation)
+
+#### GET Request with Range Header
+
+```bash
+# Request with Range header (if supported)
+curl -v -H "Range: bytes=0-100" http://127.0.0.1:8080/index.html
+```
+
+**Expected Behavior:**
+- Server may return partial content or full content
+- Response includes appropriate status code
+
+#### GET Request with Keep-Alive
+
+```bash
+# GET request with Connection: keep-alive
+curl -v -H "Connection: keep-alive" http://127.0.0.1:8080/
+```
+
+**Expected Behavior:**
+- Response includes `Connection: keep-alive` header
+- Connection remains open for subsequent requests
+
+#### GET Request Using netcat
+
+```bash
+# Manual GET request using netcat
+printf 'GET / HTTP/1.1\r\nHost: 127.0.0.1:8080\r\n\r\n' | nc 127.0.0.1 8080
+```
+
+**Expected Output:**
+```
+HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: <size>
+Connection: close
+
+<html content>
+```
+
+---
+
+### POST Method Tests
+
+#### Basic POST Request with Data
+
+```bash
+# POST request with form data
+curl -v -X POST http://127.0.0.1:8080/ \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "name=test&value=123"
+```
+
+**Expected Behavior:**
+- Server accepts POST data
+- Returns appropriate response (may vary based on location configuration)
+- Body data is received and processed
+
+#### POST Request to Upload Location
+
+```bash
+# POST request to /uploads location (if configured)
+curl -v -X POST http://127.0.0.1:8080/uploads/ \
+  -H "Content-Disposition: attachment; filename=test.txt" \
+  -d "This is test file content"
+```
+
+**Expected Output:**
+```
+< HTTP/1.1 201 Created
+< Location: /uploads/test.txt
+< Content-Type: text/plain
+< 
+File uploaded successfully: test.txt
+```
+
+**Verification:**
+```bash
+# Verify file was created
+ls -la www/uploads/test.txt
+
+# Verify file content
+cat www/uploads/test.txt
+```
+
+#### POST Request with Large Body
+
+```bash
+# POST request with body size near limit
+dd if=/dev/zero bs=1 count=1048576 | curl -v -X POST \
+  http://127.0.0.1:8080/uploads/ \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @-
+```
+
+**Expected Behavior:**
+- If body size is within `client_max_body_size`, upload succeeds
+- If body size exceeds limit, returns `413 Payload Too Large`
+
+#### POST Request Exceeding Body Size Limit
+
+```bash
+# POST request with body exceeding max size (10MB default)
+dd if=/dev/zero bs=1 count=10485761 | curl -v -X POST \
+  http://127.0.0.1:8080/uploads/ \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @-
+```
+
+**Expected Output:**
+```
+< HTTP/1.1 413 Payload Too Large
+< Content-Type: text/plain
+< 
+413 Payload Too Large
+```
+
+#### POST Request with Content-Length Header
+
+```bash
+# POST request with explicit Content-Length
+printf 'POST /uploads/ HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nContent-Length: 11\r\n\r\nhello world' | nc 127.0.0.1 8080
+```
+
+**Expected Behavior:**
+- Server reads exactly 11 bytes as specified by Content-Length
+- Returns appropriate response
+
+#### POST Request with Chunked Transfer-Encoding
+
+```bash
+# POST request with chunked encoding
+printf 'POST /uploads/ HTTP/1.1\r\nHost: 127.0.0.1:8080\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n' | nc 127.0.0.1 8080
+```
+
+**Expected Behavior:**
+- Server decodes chunked body correctly
+- Body content "hello world" is received
+- Returns appropriate response
+
+#### POST Request to Non-Upload Location
+
+```bash
+# POST request to root location
+curl -v -X POST http://127.0.0.1:8080/ \
+  -d "test=data"
+```
+
+**Expected Behavior:**
+- Server accepts POST request
+- Behavior depends on location configuration
+- May return error if POST is not allowed in location
+
+#### POST Request with JSON Data
+
+```bash
+# POST request with JSON content
+curl -v -X POST http://127.0.0.1:8080/uploads/ \
+  -H "Content-Type: application/json" \
+  -H "Content-Disposition: attachment; filename=data.json" \
+  -d '{"key": "value", "number": 42}'
+```
+
+**Expected Behavior:**
+- JSON data is uploaded as file
+- File is saved with .json extension
+- Returns `201 Created` response
+
+---
+
+### DELETE Method Tests
+
+#### DELETE Request for Existing File
+
+```bash
+# First, create a test file
+echo "test content" > www/test_delete.txt
+
+# DELETE the file
+curl -v -X DELETE http://127.0.0.1:8080/test_delete.txt
+```
+
+**Expected Output:**
+```
+< HTTP/1.1 204 No Content
+< Content-Length: 0
+< 
+```
+
+**Verification:**
+```bash
+# Verify file was deleted
+ls -la www/test_delete.txt
+# Should show: No such file or directory
+```
+
+#### DELETE Request for Non-Existent File
+
+```bash
+# DELETE a file that doesn't exist
+curl -v -X DELETE http://127.0.0.1:8080/nonexistent.txt
+```
+
+**Expected Output:**
+```
+< HTTP/1.1 404 Not Found
+< Content-Type: text/plain
+< 
+404 Not Found
+```
+
+#### DELETE Request for Directory
+
+```bash
+# Attempt to DELETE a directory
+curl -v -X DELETE http://127.0.0.1:8080/uploads/
+```
+
+**Expected Output:**
+```
+< HTTP/1.1 403 Forbidden
+< Content-Type: text/plain
+< 
+403 Forbidden
+```
+
+**Expected Behavior:**
+- Server rejects DELETE request for directories
+- Returns `403 Forbidden` status
+
+#### DELETE Request Using netcat
+
+```bash
+# Manual DELETE request using netcat
+printf 'DELETE /test_delete.txt HTTP/1.1\r\nHost: 127.0.0.1:8080\r\n\r\n' | nc 127.0.0.1 8080
+```
+
+**Expected Output:**
+```
+HTTP/1.1 204 No Content
+Content-Length: 0
+Connection: close
+
+```
+
+#### DELETE Request with Keep-Alive
+
+```bash
+# DELETE request with Connection: keep-alive
+curl -v -X DELETE -H "Connection: keep-alive" http://127.0.0.1:8080/test_file.txt
+```
+
+**Expected Behavior:**
+- If file exists and is deleted, returns `204 No Content`
+- Connection remains open if keep-alive is supported
+
+#### DELETE Request for Protected File
+
+```bash
+# Attempt to DELETE a file outside root directory (path traversal)
+curl -v -X DELETE http://127.0.0.1:8080/../../etc/passwd
+```
+
+**Expected Behavior:**
+- Server should reject path traversal attempts
+- Returns `403 Forbidden` or `400 Bad Request`
+
+---
+
+### Method Not Allowed Tests
+
+#### POST Request to Location That Only Allows GET
+
+```bash
+# If a location only allows GET method
+curl -v -X POST http://127.0.0.1:8080/redirect
+```
+
+**Expected Output:**
+```
+< HTTP/1.1 405 Method Not Allowed
+< Content-Type: text/plain
+< 
+Method not allowed: POST
+```
+
+#### DELETE Request to Location That Only Allows GET POST
+
+```bash
+# If a location only allows GET and POST
+curl -v -X DELETE http://127.0.0.1:8080/cgi
+```
+
+**Expected Behavior:**
+- Returns `405 Method Not Allowed` if DELETE is not in allowed methods
+- Error message indicates which method was attempted
+
+---
+
+### Combined Method Testing
+
+#### Sequential Requests (GET, POST, DELETE)
+
+```bash
+# 1. GET to verify file doesn't exist
+curl -v http://127.0.0.1:8080/test_sequence.txt
+
+# 2. POST to create file
+echo "test data" | curl -v -X POST http://127.0.0.1:8080/uploads/ \
+  -H "Content-Disposition: attachment; filename=test_sequence.txt" \
+  --data-binary @-
+
+# 3. GET to verify file exists
+curl -v http://127.0.0.1:8080/uploads/test_sequence.txt
+
+# 4. DELETE to remove file
+curl -v -X DELETE http://127.0.0.1:8080/uploads/test_sequence.txt
+
+# 5. GET to verify file is deleted
+curl -v http://127.0.0.1:8080/uploads/test_sequence.txt
+```
+
+**Expected Sequence:**
+1. `404 Not Found` (file doesn't exist)
+2. `201 Created` (file uploaded)
+3. `200 OK` with file content (file exists)
+4. `204 No Content` (file deleted)
+5. `404 Not Found` (file deleted)
+
+---
 
 ### Test with Headers
 
