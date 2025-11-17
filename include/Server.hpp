@@ -5,6 +5,7 @@
 #include "Socket.hpp"
 #include "Connection.hpp"
 #include "HttpRequest.hpp"
+#include "RequestHandler.hpp"
 #include <vector>
 #include <map>
 #include <poll.h>
@@ -21,9 +22,12 @@ class Server {
    private:
     std::vector<Socket*> listening_sockets_;
     std::map<int, Connection*> connections_;
+    std::map<int, std::pair<std::string, int> > socket_to_address_;
     std::vector<struct pollfd> poll_fds_;
     bool running_;
     time_t connection_timeout_;
+    ConfigParser config_;
+    RequestHandler request_handler_;
 
     void setupPollFds();
     void handlePollEvents();
@@ -36,7 +40,7 @@ class Server {
     void removePollFd(int fd);
     void updatePollFd(int fd, short events);
     bool sendAll(int fd, const std::string& data);
-    void sendParsedEcho(int fd, const HttpRequest& request);
+    void handleHttpRequest(int fd, const HttpRequest& request);
     void sendErrorResponse(int fd, int status_code, const std::string& message);
 
     Server(const Server&);

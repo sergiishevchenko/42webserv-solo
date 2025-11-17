@@ -36,6 +36,7 @@ Server::Server() : running_(false), connection_timeout_(60) {}
 Server::~Server() { stop(); }
 
 bool Server::init(const ConfigParser& config) {
+    config_ = config;
     const std::vector<ServerConfig>& servers = config.getServers();
     if (servers.empty()) {
         LOG_ERROR() << "No server configurations found" << std::endl;
@@ -64,6 +65,7 @@ bool Server::init(const ConfigParser& config) {
             }
 
             listening_sockets_.push_back(socket);
+            socket_to_address_[socket->getFd()] = std::make_pair(host, port);
             addPollFd(socket->getFd(), POLLIN);
             LOG_INFO() << "Listening on " << host << ":" << port << std::endl;
         }
@@ -134,15 +136,27 @@ void Server::acceptNewConnection(Socket* socket) {
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
     std::string client_ip = "unknown";
+    int client_port = 0;
     if (getpeername(client_fd, (struct sockaddr*)&client_addr, &client_len) ==
         0) {
         client_ip = inet_ntoa(client_addr.sin_addr);
+        client_port = ntohs(client_addr.sin_port);
     }
 
-    Connection* conn = new Connection(client_fd, client_ip);
+    std::string server_host = "0.0.0.0";
+    int server_port = 0;
+    std::map<int, std::pair<std::string, int> >::iterator addr_it =
+        socket_to_address_.find(socket->getFd());
+    if (addr_it != socket_to_address_.end()) {
+        server_host = addr_it->second.first;
+        server_port = addr_it->second.second;
+    }
+
+    Connection* conn = new Connection(client_fd, client_ip, client_port,
+                                      server_host, server_port);
     connections_[client_fd] = conn;
-    LOG_INFO() << "New connection from " << client_ip << " (fd: " << client_fd
-               << ")" << std::endl;
+    LOG_INFO() << "New connection from " << client_ip << ":" << client_port
+               << " (fd: " << client_fd << ")" << std::endl;
 }
 
 void Server::handleClientRead(int fd) {
@@ -192,7 +206,7 @@ void Server::handleClientRead(int fd) {
         const HttpRequest& request = parser.getRequest();
         LOG_INFO() << "Parsed request " << request.method << " " << request.path
                    << " (fd: " << fd << ")" << std::endl;
-        sendParsedEcho(fd, request);
+        handleHttpRequest(fd, request);
         if (request.keep_alive) {
             conn->resetRequestParser();
         } else {
@@ -355,34 +369,18 @@ bool Server::sendAll(int fd, const std::string& data) {
     return total == data.size();
 }
 
-void Server::sendParsedEcho(int fd, const HttpRequest& request) {
-    std::ostringstream body;
-    body << "Method: " << request.method << "\n";
-    body << "Path: " << request.path << "\n";
-    body << "Query: " << (request.query.empty() ? "-" : request.query) << "\n";
-    body << "Version: " << request.version << "\n";
-    body << "Keep-Alive: " << (request.keep_alive ? "true" : "false") << "\n";
-    body << "Content-Length: " << request.content_length << "\n";
-    body << "Chunked: " << (request.chunked ? "true" : "false") << "\n";
-    body << "Decoded-Body-Bytes: " << request.body.size() << "\n";
-    body << "Headers:\n";
-    for (std::map<std::string, std::string>::const_iterator it =
-             request.headers.begin();
-         it != request.headers.end(); ++it) {
-        body << "  " << it->first << ": " << it->second << "\n";
+void Server::handleHttpRequest(int fd, const HttpRequest& request) {
+    std::map<int, Connection*>::iterator it = connections_.find(fd);
+    if (it == connections_.end()) {
+        return;
     }
 
-    std::string body_str = body.str();
-    std::ostringstream response;
-    response << "HTTP/1.1 200 OK\r\n";
-    response << "Content-Type: text/plain\r\n";
-    response << "Content-Length: " << body_str.size() << "\r\n";
-    response << "Connection: "
-             << (request.keep_alive ? "keep-alive" : "close") << "\r\n";
-    response << "\r\n";
-    response << body_str;
+    Connection* conn = it->second;
+    HttpResponse response = request_handler_.handleRequest(
+        request, config_, conn->getServerHost(), conn->getServerPort());
 
-    if (!sendAll(fd, response.str())) {
+    std::string response_str = response.toString();
+    if (!sendAll(fd, response_str)) {
         closeConnection(fd);
     }
 }
