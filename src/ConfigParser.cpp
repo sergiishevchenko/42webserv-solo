@@ -178,7 +178,21 @@ bool ConfigParser::parseLocationDirective(const std::string& line,
         location.autoindex = (tokens[1] == "on");
         return true;
     } else if (directive == "return" && tokens.size() >= 2) {
-        location.redirect = tokens[1];
+        if (tokens.size() >= 3 && isNumber(tokens[1])) {
+            std::istringstream iss(tokens[1]);
+            int code;
+            iss >> code;
+            if (code == 301 || code == 302) {
+                location.redirect_code = code;
+                location.redirect = tokens[2];
+            } else {
+                location.redirect_code = 302;
+                location.redirect = tokens[1];
+            }
+        } else {
+            location.redirect_code = 302;
+            location.redirect = tokens[1];
+        }
         return true;
     } else if (directive == "upload_store" && tokens.size() >= 2) {
         location.upload_store = tokens[1];

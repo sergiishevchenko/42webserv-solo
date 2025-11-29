@@ -4,6 +4,7 @@
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
 #include "ConfigParser.hpp"
+#include "CgiHandler.hpp"
 #include <string>
 
 class RequestHandler {
@@ -33,6 +34,7 @@ class RequestHandler {
     HttpResponse handleGet(const HttpRequest& request, const ServerConfig& server, const Location* location);
     HttpResponse handlePost(const HttpRequest& request, const ServerConfig& server, const Location* location);
     HttpResponse handleDelete(const HttpRequest& request, const ServerConfig& server, const Location* location);
+    HttpResponse handleRedirect(const HttpRequest& request, const Location* location);
 
     RequestHandler(const RequestHandler&);
     RequestHandler& operator=(const RequestHandler&);

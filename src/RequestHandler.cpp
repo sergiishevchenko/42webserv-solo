@@ -28,6 +28,10 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request, const Con
 
     const Location* location = findLocation(request, *server);
 
+    if (location && !location->redirect.empty()) {
+        return handleRedirect(request, location);
+    }
+
     if (!isMethodAllowed(request.method, location)) {
         response.setStatus(405, "Method Not Allowed");
         response.setBody("Method not allowed: " + request.method);
@@ -373,6 +377,14 @@ HttpResponse RequestHandler::handleGet(const HttpRequest& request, const ServerC
         return generateErrorPage(403, server);
     }
 
+    if (CgiHandler::shouldHandleByCgi(request, location, file_path)) {
+        if (isFile(file_path)) {
+            return CgiHandler::executeCgi(request, server, location, file_path);
+        } else {
+            return generateErrorPage(404, server);
+        }
+    }
+
     if (isDirectory(file_path)) {
         return serveDirectory(file_path, request.path, server, location);
     } else if (isFile(file_path)) {
@@ -395,6 +407,14 @@ HttpResponse RequestHandler::handlePost(const HttpRequest& request, const Server
     if (!isPathSafe(file_path, server.root)) {
         response = generateErrorPage(403, server);
         return response;
+    }
+
+    if (CgiHandler::shouldHandleByCgi(request, location, file_path)) {
+        if (isFile(file_path)) {
+            return CgiHandler::executeCgi(request, server, location, file_path);
+        } else {
+            return generateErrorPage(404, server);
+        }
     }
 
     std::string upload_dir;
@@ -511,5 +531,38 @@ HttpResponse RequestHandler::handleDelete(const HttpRequest& request, const Serv
     response.setStatus(204, "No Content");
     response.setHeader("Content-Length", "0");
     response.setBody("");
+    return response;
+}
+
+HttpResponse RequestHandler::handleRedirect(const HttpRequest& request, const Location* location) {
+    HttpResponse response;
+    
+    if (!location || location->redirect.empty()) {
+        response.setStatus(500, "Internal Server Error");
+        response.setBody("Redirect configuration error");
+        return response;
+    }
+
+    std::string redirect_url = location->redirect;
+    int redirect_code = location->redirect_code;
+    
+    if (redirect_url.find("http://") == 0 || redirect_url.find("https://") == 0) {
+        response.setHeader("Location", redirect_url);
+    } else {
+        if (redirect_url[0] != '/') {
+            redirect_url = "/" + redirect_url;
+        }
+        response.setHeader("Location", redirect_url);
+    }
+    
+    if (redirect_code == 301) {
+        response.setStatus(301, "Moved Permanently");
+    } else {
+        response.setStatus(302, "Found");
+    }
+    
+    response.setHeader("Content-Length", "0");
+    response.setBody("");
+    response.setKeepAlive(request.keep_alive);
     return response;
 }
