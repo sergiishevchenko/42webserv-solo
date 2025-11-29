@@ -13,10 +13,11 @@ struct Location {
     std::string index;
     bool autoindex;
     std::string redirect;
+    int redirect_code;
     std::string upload_store;
     std::map<std::string, std::string> cgi_pass;
 
-    Location() : autoindex(false) {}
+    Location() : autoindex(false), redirect_code(302) {}
 };
 
 struct ServerConfig {
