@@ -342,9 +342,20 @@ HttpResponse CgiHandler::executeCgi(const HttpRequest& request, const ServerConf
             exit(1);
         }
 
+        std::string relative_script_path = script_path;
+        if (script_path.find(server.root) == 0) {
+            relative_script_path = script_path.substr(server.root.length());
+            if (relative_script_path.empty() || relative_script_path[0] != '/') {
+                relative_script_path = "/" + relative_script_path;
+            }
+            if (relative_script_path[0] == '/') {
+                relative_script_path = relative_script_path.substr(1);
+            }
+        }
+
         char* argv[3];
         argv[0] = const_cast<char*>(interpreter.c_str());
-        argv[1] = const_cast<char*>(script_path.c_str());
+        argv[1] = const_cast<char*>(relative_script_path.c_str());
         argv[2] = NULL;
 
         execve(interpreter.c_str(), argv, env_array);

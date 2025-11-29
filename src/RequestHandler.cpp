@@ -117,19 +117,18 @@ std::string RequestHandler::buildFilePath(const HttpRequest& request, const Serv
     std::string root = server.root;
     if (location && !location->root.empty()) {
         root = location->root;
-    }
-
-    std::string path = request.path;
-    if (location) {
+        std::string path = request.path;
         if (path.find(location->path) == 0) {
             path = path.substr(location->path.length());
             if (path.empty() || path[0] != '/') {
                 path = "/" + path;
             }
         }
+        std::string full_path = normalizePath(root + path);
+        return full_path;
     }
 
-    std::string full_path = normalizePath(root + path);
+    std::string full_path = normalizePath(root + request.path);
     return full_path;
 }
 

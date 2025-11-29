@@ -77,7 +77,7 @@ test_hello() {
     
     response=$(curl -s -w "\n%{http_code}" "$SERVER_URL/cgi/hello.py")
     http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n-1)
+    body=$(echo "$response" | sed '$d')
     
     if [ "$http_code" = "200" ] && echo "$body" | grep -q "Hello from CGI"; then
         print_success "Hello CGI script"
@@ -92,7 +92,7 @@ test_env() {
     
     response=$(curl -s -w "\n%{http_code}" "$SERVER_URL/cgi/env.py")
     http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n-1)
+    body=$(echo "$response" | sed '$d')
     
     if [ "$http_code" = "200" ] && echo "$body" | grep -q "REQUEST_METHOD"; then
         print_success "Environment variables script"
@@ -107,7 +107,7 @@ test_query() {
     
     response=$(curl -s -w "\n%{http_code}" "$SERVER_URL/cgi/query.py?name=test&value=123")
     http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n-1)
+    body=$(echo "$response" | sed '$d')
     
     if [ "$http_code" = "200" ] && echo "$body" | grep -q "name" && echo "$body" | grep -q "test"; then
         print_success "Query string parsing"
@@ -124,7 +124,7 @@ test_post() {
         -H "Content-Type: application/x-www-form-urlencoded" \
         "$SERVER_URL/cgi/post.py")
     http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n-1)
+    body=$(echo "$response" | sed '$d')
     
     if [ "$http_code" = "200" ] && echo "$body" | grep -q "test_data"; then
         print_success "POST request handling"
@@ -149,11 +149,11 @@ test_status() {
 
 # Test JSON response
 test_json() {
-    print_test "JSON response (json.py)"
+    print_test "JSON response (json_response.py)"
     
-    response=$(curl -s -w "\n%{http_code}" "$SERVER_URL/cgi/json.py?test=value")
+    response=$(curl -s -w "\n%{http_code}" "$SERVER_URL/cgi/json_response.py?test=value")
     http_code=$(echo "$response" | tail -n1)
-    body=$(echo "$response" | head -n-1)
+    body=$(echo "$response" | sed '$d')
     
     if [ "$http_code" = "200" ] && echo "$body" | grep -q "\"method\""; then
         print_success "JSON response"
