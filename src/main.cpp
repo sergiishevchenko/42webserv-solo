@@ -73,15 +73,7 @@ int main(int argc, char** argv) {
             const Location& loc = s.locations[j];
             oss << "  [" << loc.path << "] ";
             if (!loc.methods.empty()) {
-                oss << "methods: ";
-                for (std::set<std::string>::const_iterator it =
-                         loc.methods.begin();
-                     it != loc.methods.end(); ++it) {
-                    if (it != loc.methods.begin())
-                        oss << " ";
-                    oss << *it;
-                }
-                oss << " | ";
+                oss << "methods: (count=" << loc.methods.size() << ") ";
             }
             if (!loc.upload_store.empty())
                 oss << "upload_store: " << loc.upload_store << " | ";
