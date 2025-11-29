@@ -152,6 +152,11 @@ void Server::printFileDescriptors() {
 }
 ```
 
+## Related Documentation
+
+- [Pipes and File Descriptors](PIPES_AND_FDS.md) - Detailed explanation of pipes and their relationship with file descriptors
+- [CGI Pipes and File Descriptors](CGI_PIPES.md) - CGI-specific pipe implementation details
+
 ## References
 
 - `/proc/<PID>/fd/` - Directory containing file descriptor symlinks

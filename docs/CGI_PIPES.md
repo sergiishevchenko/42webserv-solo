@@ -427,6 +427,10 @@ Always ensure:
 6. **Implement timeouts** for long-running CGI scripts
 7. **Clean up on all exit paths** (normal and error)
 
+## Related Documentation
+
+- [Pipes and File Descriptors](PIPES_AND_FDS.md) - Comprehensive guide to pipes and their relationship with file descriptors in Unix systems
+
 ## References
 
 - `man 2 pipe` - Pipe system call documentation
