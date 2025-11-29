@@ -131,6 +131,7 @@ See example configurations in the `config/` directory:
 - `config/test_valid.conf` - Full featured example
 - `config/test_cgi.conf` - CGI configuration
 - `config/test_multiport.conf` - Multi-port setup
+- `config/test_redirects.conf` - Redirect examples
 
 ## Supported Features
 
@@ -166,6 +167,21 @@ See example configurations in the `config/` directory:
 # Run automated CGI tests
 ./scripts/test_cgi.sh
 ```
+
+### Redirect Testing
+
+```bash
+# Start server with redirect config
+./webserv config/test_redirects.conf
+
+# Run automated redirect tests
+./scripts/test_redirects.sh config/test_redirects.conf 8080
+
+# Manual redirect test
+curl -v http://127.0.0.1:8080/redirect
+```
+
+For detailed redirect testing instructions, see [TESTING_REDIRECTS.md](docs/TESTING_REDIRECTS.md)
 
 ### Manual Testing
 
@@ -226,6 +242,7 @@ For more details, see [FORMATTING.md](docs/FORMATTING.md)
 
 - [CGI.md](docs/CGI.md) - CGI/1.1 implementation details
 - [REDIRECTS.md](docs/REDIRECTS.md) - HTTP redirects documentation
+- [TESTING_REDIRECTS.md](docs/TESTING_REDIRECTS.md) - Redirect testing guide
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture overview
 
 ### Reference Documentation
