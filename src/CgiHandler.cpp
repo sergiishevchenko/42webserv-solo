@@ -1,5 +1,4 @@
 #include "CgiHandler.hpp"
-#include "Logger.hpp"
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -9,7 +8,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <sstream>
-#include <fstream>
 #include <algorithm>
 #include <ctime>
 
