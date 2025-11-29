@@ -293,6 +293,8 @@ open /tmp/cgi_output.html  # macOS
 - Both pipes are properly closed after use
 - Child process duplicates file descriptors to stdin/stdout
 
+For detailed information about pipe creation, file descriptor management, and communication flow, see [CGI Pipes and File Descriptors](CGI_PIPES.md).
+
 ### Synchronous Execution
 
 Currently, CGI execution is synchronous:
@@ -323,6 +325,10 @@ For detailed information about testing CGI scripts, including test scripts and v
 ### Viewing HTML Responses
 
 When testing CGI scripts that return HTML (like `env.py` which displays environment variables in a formatted table), remember to use a browser instead of `curl` to see the properly formatted output. See the example above for browser viewing options.
+
+## Related Documentation
+
+- [CGI Pipes and File Descriptors](CGI_PIPES.md) - Detailed explanation of pipe usage and file descriptor management in CGI implementation
 
 ## References
 
