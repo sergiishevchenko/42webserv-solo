@@ -244,6 +244,32 @@ chmod +x www/cgi/hello.py
 curl http://127.0.0.1:8080/cgi/hello.py?name=world
 ```
 
+### Viewing HTML Output
+
+**Important:** When testing CGI scripts that return HTML (with tables, styling, etc.), use a browser to see properly formatted output. The `curl` command outputs raw HTML text, so formatting won't be visible.
+
+**Option 1: Open directly in browser:**
+```bash
+# macOS
+open http://127.0.0.1:8080/cgi/hello.py?name=world
+
+# Linux
+xdg-open http://127.0.0.1:8080/cgi/hello.py?name=world
+```
+
+**Option 2: Use the browser test script:**
+```bash
+./scripts/test_cgi_browser.sh hello.py open
+```
+
+**Option 3: Save and open HTML file:**
+```bash
+curl -s http://127.0.0.1:8080/cgi/hello.py?name=world > /tmp/cgi_output.html
+open /tmp/cgi_output.html  # macOS
+```
+
+**Note:** Scripts like `env.py` output formatted HTML tables that are best viewed in a browser. Use `curl` for testing JSON responses or checking HTTP status codes, but use a browser for HTML output.
+
 ## Implementation Details
 
 ### File Structure
@@ -283,7 +309,20 @@ Currently, CGI execution is synchronous:
 
 ## Testing
 
-For detailed information about testing CGI scripts, including test scripts and automated testing, see the [CGI Test Scripts README](../../www/cgi/README.md).
+### Automated Testing
+
+Run the automated test suite:
+```bash
+./scripts/test_cgi.sh
+```
+
+### Manual Testing
+
+For detailed information about testing CGI scripts, including test scripts and viewing HTML output in browsers, see the [CGI Test Scripts README](../../www/cgi/README.md).
+
+### Viewing HTML Responses
+
+When testing CGI scripts that return HTML (like `env.py` which displays environment variables in a formatted table), remember to use a browser instead of `curl` to see the properly formatted output. See the example above for browser viewing options.
 
 ## References
 

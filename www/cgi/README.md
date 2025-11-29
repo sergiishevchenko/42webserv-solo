@@ -33,10 +33,11 @@ This directory contains test CGI scripts for webserv.
   - Returns custom HTTP status codes
   - Usage: `GET /cgi/status.py?status=404`
 
-- **json.py** - JSON response
+- **json_response.py** - JSON response
   - Returns JSON formatted data
   - Includes request information
-  - Usage: `GET /cgi/json.py?key=value`
+  - Usage: `GET /cgi/json_response.py?key=value`
+  - Note: Renamed from `json.py` to avoid conflict with Python's `json` module
 
 - **redirect.py** - CGI redirect
   - Demonstrates redirect from CGI script
@@ -68,6 +69,35 @@ This directory contains test CGI scripts for webserv.
    curl "http://127.0.0.1:8080/cgi/query.py?name=test&value=123"
    curl -X POST -d "data=test" http://127.0.0.1:8080/cgi/post.py
    ```
+
+#### Viewing HTML Output in Browser
+
+**Important:** When testing CGI scripts that return HTML (like `env.py`), use a browser to see properly formatted output. The `curl` command outputs raw HTML text, so tables and styling won't be visible.
+
+**Option 1: Open directly in browser:**
+```bash
+# macOS
+open http://127.0.0.1:8080/cgi/env.py
+
+# Linux
+xdg-open http://127.0.0.1:8080/cgi/env.py
+```
+
+**Option 2: Use the browser test script:**
+```bash
+./scripts/test_cgi_browser.sh env.py open
+```
+
+**Option 3: Save and open HTML file:**
+```bash
+curl -s http://127.0.0.1:8080/cgi/env.py > /tmp/cgi_output.html
+open /tmp/cgi_output.html  # macOS
+```
+
+**Why use a browser?**
+- `curl` displays HTML as plain text
+- Browsers render HTML with proper formatting, CSS styling, and table layout
+- Scripts like `env.py` output formatted HTML tables that are best viewed in a browser
 
 ### Automated Testing
 
