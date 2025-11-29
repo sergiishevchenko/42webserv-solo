@@ -26,6 +26,7 @@ SRCS		:= $(SRC_DIR)/main.cpp \
 			   $(SRC_DIR)/HttpResponse.cpp \
 			   $(SRC_DIR)/RequestParser.cpp \
 			   $(SRC_DIR)/RequestHandler.cpp \
+			   $(SRC_DIR)/CgiHandler.cpp \
 			   $(SRC_DIR)/Server.cpp
 OBJS		:= $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 
