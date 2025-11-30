@@ -4,40 +4,51 @@ HTTP/1.1 web server developed individually as part of the 42 project. Implements
 
 ## Features
 
-### Core Functionality
-
-- ✅ **HTTP/1.1 Protocol** - Full request/response handling
-- ✅ **Non-blocking I/O** - Single event loop using `poll()` for efficient concurrent connections
-- ✅ **Multiple Server Blocks** - Listen on multiple ports with different configurations
-- ✅ **Virtual Hosts** - Support for multiple server configurations
+### HTTP Protocol
+- ✅ **HTTP/1.1** - Full protocol support with proper headers
+- ✅ **HTTP/1.0** - Backward compatibility
+- ✅ **Keep-Alive** - Connection reuse for multiple requests
+- ✅ **Chunked Encoding** - Transfer-Encoding: chunked support
 
 ### HTTP Methods
-
-- ✅ **GET** - Serve static files and handle directory listings
+- ✅ **GET** - Static file serving with Range support
 - ✅ **POST** - File uploads with size limits
 - ✅ **DELETE** - File deletion with proper status codes
 
-### Static File Serving
+### Request Handling
+- ✅ **Query Strings** - URL parameter parsing
+- ✅ **Headers** - Full header parsing and validation
+- ✅ **Body Parsing** - Content-Length and chunked body support
+- ✅ **Path Normalization** - Security against directory traversal
 
-- ✅ **Static Files** - Serve files from document root
+### Response Features
+- ✅ **Status Codes** - Complete HTTP status code support (2xx, 3xx, 4xx, 5xx)
+- ✅ **Custom Error Pages** - Configurable error pages per status code
+- ✅ **Content-Type** - Automatic MIME type detection
+
+### File Serving
+- ✅ **Static Files** - Binary and text file serving
 - ✅ **Directory Index** - Configurable index files
 - ✅ **Autoindex** - Automatic directory listing generation
-- ✅ **Error Pages** - Custom error pages for 4xx and 5xx errors
 
 ### Advanced Features
-
-- ✅ **CGI Support** - Execute Python scripts and other interpreters via CGI/1.1
+- ✅ **CGI/1.1** - Python and other interpreters via fork/execve
 - ✅ **Redirects** - HTTP 301/302 redirects at location level
 - ✅ **File Uploads** - POST requests with upload store configuration
-- ✅ **Keep-Alive** - HTTP connection reuse
-- ✅ **Chunked Encoding** - Support for Transfer-Encoding: chunked
+- ✅ **Multi-port** - Multiple server blocks on different ports
+- ✅ **Virtual Hosts** - Host-based routing via Host header
 
 ### Configuration
-
-- ✅ **Nginx-inspired Syntax** - Familiar configuration format
-- ✅ **Flexible Location Blocks** - Path-based routing with method restrictions
-- ✅ **Multiple Listen Directives** - Bind to multiple interfaces/ports
+- ✅ **Nginx Syntax** - Familiar configuration format
+- ✅ **Location Blocks** - Path-based routing with method restrictions
+- ✅ **Multiple Listen** - Bind to multiple interfaces/ports
 - ✅ **Client Limits** - Configurable body size limits and timeouts
+
+### Performance
+- ✅ **Non-blocking I/O** - Single event loop using poll()
+- ✅ **Concurrent Connections** - Handle multiple clients simultaneously
+- ✅ **Connection Timeouts** - Automatic cleanup of idle connections
+- ✅ **Request Timeouts** - Protection against slow requests
 
 ## Building
 
@@ -92,7 +103,7 @@ The server will start listening on the configured ports and log startup informat
 
 ### Interactive Demo
 
-Once the server is running, you can access the interactive demonstration page:
+Once the server is running, access the interactive demonstration page:
 
 ```bash
 # Start server
@@ -102,16 +113,32 @@ Once the server is running, you can access the interactive demonstration page:
 # http://127.0.0.1:8080/demo.html
 ```
 
-The demo page (`/demo.html`) provides an interactive interface to test all features:
+Or simply visit the main page and click the "🚀 Try Interactive Demo" link.
+
+The demo page provides an interactive interface to test all features:
 - Static file serving (HTML, text, JSON, binary)
-- CGI script execution
-- File uploads and downloads
+- CGI script execution with query parameters
+- File uploads via web form
 - File deletion
 - HTTP redirects
 - Error handling (404, 405)
 - Directory listings
 
-Or simply visit the main page and click the "🚀 Try Interactive Demo" link.
+#### Demo Screenshots
+
+<div align="center">
+
+![Demo Screenshot 1](images/1.png)
+
+![Demo Screenshot 2](images/2.png)
+
+![Demo Screenshot 3](images/3.png)
+
+![Demo Screenshot 4](images/4.png)
+
+![Demo Screenshot 5](images/5.png)
+
+</div>
 
 ## Configuration
 
@@ -165,6 +192,8 @@ server {
 }
 ```
 
+### Example Configurations
+
 See example configurations in the `config/` directory:
 - `config/example.conf` - Basic configuration
 - `config/test_valid.conf` - Full featured example
@@ -172,57 +201,13 @@ See example configurations in the `config/` directory:
 - `config/test_multiport.conf` - Multi-port setup
 - `config/test_redirects.conf` - Redirect examples
 
-## Supported Features
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| **HTTP Protocol** |
-| HTTP/1.1 | ✅ | Full protocol support with proper headers |
-| HTTP/1.0 | ✅ | Backward compatibility |
-| Keep-Alive | ✅ | Connection reuse for multiple requests |
-| Chunked Encoding | ✅ | Transfer-Encoding: chunked support |
-| **HTTP Methods** |
-| GET | ✅ | Static file serving with Range support |
-| POST | ✅ | File uploads with size limits |
-| DELETE | ✅ | File deletion with proper status codes |
-| **Request Handling** |
-| Query Strings | ✅ | URL parameter parsing |
-| Headers | ✅ | Full header parsing and validation |
-| Body Parsing | ✅ | Content-Length and chunked body support |
-| Path Normalization | ✅ | Security against directory traversal |
-| **Response Features** |
-| Status Codes | ✅ | Complete HTTP status code support (2xx, 3xx, 4xx, 5xx) |
-| Custom Error Pages | ✅ | Configurable error pages per status code |
-| Content-Type | ✅ | Automatic MIME type detection |
-| **File Serving** |
-| Static Files | ✅ | Binary and text file serving |
-| Directory Index | ✅ | Configurable index files |
-| Autoindex | ✅ | Automatic directory listing generation |
-| **Advanced Features** |
-| CGI/1.1 | ✅ | Python and other interpreters via fork/execve |
-| Redirects | ✅ | HTTP 301/302 redirects at location level |
-| File Uploads | ✅ | POST requests with upload store configuration |
-| Multi-port | ✅ | Multiple server blocks on different ports |
-| Virtual Hosts | ✅ | Host-based routing via Host header |
-| **Configuration** |
-| Nginx Syntax | ✅ | Familiar configuration format |
-| Location Blocks | ✅ | Path-based routing with method restrictions |
-| Multiple Listen | ✅ | Bind to multiple interfaces/ports |
-| Client Limits | ✅ | Configurable body size limits and timeouts |
-| **Performance** |
-| Non-blocking I/O | ✅ | Single event loop using poll() |
-| Concurrent Connections | ✅ | Handle multiple clients simultaneously |
-| Connection Timeouts | ✅ | Automatic cleanup of idle connections |
-| Request Timeouts | ✅ | Protection against slow requests |
-
 ## Testing
 
-### Comprehensive Test Suite
+### Automated Test Suites
 
-Run all tests automatically:
-
+**Full test suite:**
 ```bash
-# Full test suite (starts server, runs all tests, stops server)
+# Starts server, runs all tests, stops server
 ./scripts/test_all.sh
 ```
 
@@ -237,71 +222,7 @@ This includes:
 - Chunked encoding
 - Error handling (404, 405, 413)
 
-### Upload Scenarios Test
-
-Test file upload functionality:
-
-```bash
-./scripts/test_upload.sh
-```
-
-Tests:
-- Small file uploads (< 1KB)
-- Medium file uploads (100KB)
-- Large file uploads (1MB)
-- Upload size limit enforcement (413)
-- Multipart form uploads
-- Upload directory listing
-
-### Stress Test
-
-Long-running traffic test:
-
-```bash
-# Default: 60 seconds, 20 concurrent connections
-./scripts/test_stress.sh
-
-# Custom: 120 seconds, 50 concurrent connections
-./scripts/test_stress.sh 120 50
-```
-
-### Configuration Parser Tests
-
-```bash
-./scripts/test_config.sh
-```
-
-### CGI Testing
-
-```bash
-# Start server with CGI config
-./webserv config/test_cgi.conf
-
-# Run automated CGI tests
-./scripts/test_cgi.sh
-```
-
-### Redirect Testing
-
-```bash
-# Start server with redirect config
-./webserv config/test_redirects.conf
-
-# Run automated redirect tests
-./scripts/test_redirects.sh config/test_redirects.conf 8080
-
-# Manual redirect test
-curl -v http://127.0.0.1:8080/redirect
-```
-
-For detailed redirect testing instructions, see [TESTING_REDIRECTS.md](docs/TESTING_REDIRECTS.md)
-
-For comprehensive testing documentation, see [COMPREHENSIVE_TESTING.md](docs/COMPREHENSIVE_TESTING.md)
-
-### Python Comprehensive Test
-
-Run the Python-based comprehensive test suite:
-
+**Python comprehensive test:**
 ```bash
 # Start the server in one terminal
 ./webserv config/test_valid.conf
@@ -321,42 +242,55 @@ The Python test suite includes:
 - Connection timeouts
 - Stress testing (100+ requests)
 
-### Interactive Demo Page
+### Specialized Tests
 
-The easiest way to test all features is through the interactive demo page:
-
+**Upload scenarios:**
 ```bash
-# Start the server
-./webserv config/test_valid.conf
-
-# Open in browser
-# http://127.0.0.1:8080/demo.html
+./scripts/test_upload.sh
 ```
 
-The demo page provides a user-friendly interface to test:
-- Static file serving (HTML, text, JSON, binary)
-- CGI script execution with query parameters
-- File uploads via web form
-- File deletion
-- HTTP redirects
-- Error handling (404, 405)
-- Directory listings
+Tests:
+- Small file uploads (< 1KB)
+- Medium file uploads (100KB)
+- Large file uploads (1MB)
+- Upload size limit enforcement (413)
+- Multipart form uploads
+- Upload directory listing
 
-#### Demo Screenshots
+**Stress test:**
+```bash
+# Default: 60 seconds, 20 concurrent connections
+./scripts/test_stress.sh
 
-<div align="center">
+# Custom: 120 seconds, 50 concurrent connections
+./scripts/test_stress.sh 120 50
+```
 
-![Demo Screenshot 1](images/1.png)
+**Configuration parser:**
+```bash
+./scripts/test_config.sh
+```
 
-![Demo Screenshot 2](images/2.png)
+**CGI testing:**
+```bash
+# Start server with CGI config
+./webserv config/test_cgi.conf
 
-![Demo Screenshot 3](images/3.png)
+# Run automated CGI tests
+./scripts/test_cgi.sh
+```
 
-![Demo Screenshot 4](images/4.png)
+**Redirect testing:**
+```bash
+# Start server with redirect config
+./webserv config/test_redirects.conf
 
-![Demo Screenshot 5](images/5.png)
+# Run automated redirect tests
+./scripts/test_redirects.sh config/test_redirects.conf 8080
 
-</div>
+# Manual redirect test
+curl -v http://127.0.0.1:8080/redirect
+```
 
 ### Manual Testing
 
@@ -389,7 +323,12 @@ curl -v --keepalive-time 2 http://127.0.0.1:8080/
 echo -e "5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n" | nc 127.0.0.1 8080
 ```
 
-For comprehensive testing instructions, see [TESTING.md](docs/TESTING.md)
+### Testing Documentation
+
+For detailed testing instructions, see:
+- [TESTING.md](docs/TESTING.md) - General testing guide
+- [TESTING_REDIRECTS.md](docs/TESTING_REDIRECTS.md) - Redirect testing guide
+- [COMPREHENSIVE_TESTING.md](docs/COMPREHENSIVE_TESTING.md) - Comprehensive testing documentation
 
 ## CGI Scripts
 
@@ -399,7 +338,7 @@ The project includes test CGI scripts in `www/cgi/`:
 - `env.py` - Environment variables display
 - `query.py` - Query string parser
 - `post.py` - POST request handler
-- `json.py` - JSON response example
+- `json_response.py` - JSON response example
 - `status.py` - Custom status codes
 - `redirect.py` - CGI redirect example
 
@@ -429,7 +368,6 @@ For more details, see [FORMATTING.md](docs/FORMATTING.md)
 
 - [CGI.md](docs/CGI.md) - CGI/1.1 implementation details
 - [REDIRECTS.md](docs/REDIRECTS.md) - HTTP redirects documentation
-- [TESTING_REDIRECTS.md](docs/TESTING_REDIRECTS.md) - Redirect testing guide
 - [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture overview
 
 ### Reference Documentation
@@ -443,6 +381,10 @@ For more details, see [FORMATTING.md](docs/FORMATTING.md)
 - [SOCKETS.md](docs/SOCKETS.md) - Socket implementation
 - [POLL.md](docs/POLL.md) - Event loop implementation
 - [FILE_DESCRIPTORS.md](docs/FILE_DESCRIPTORS.md) - File descriptor management
+- [CGI_PIPES.md](docs/CGI_PIPES.md) - CGI pipes implementation
+- [PARAMETER_PASSING.md](docs/PARAMETER_PASSING.md) - Parameter passing details
+- [PIPES_AND_FDS.md](docs/PIPES_AND_FDS.md) - Pipes and file descriptors
+- [SEND_RECV_SOCKET.md](docs/SEND_RECV_SOCKET.md) - Socket send/receive operations
 
 ## Project Structure
 
