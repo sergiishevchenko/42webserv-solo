@@ -364,7 +364,7 @@ std::string RequestHandler::getContentType(const std::string& file_path) {
 
 bool RequestHandler::isMethodAllowed(const std::string& method, const Location* location) {
     if (!location || location->methods.empty()) {
-        return true;
+        return method == "GET";
     }
     return location->methods.find(method) != location->methods.end();
 }

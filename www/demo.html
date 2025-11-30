@@ -145,6 +145,29 @@
             border: 1px solid #f5c6cb;
         }
         
+        .result-html {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 0;
+            overflow: auto;
+            max-height: 600px;
+        }
+        
+        .result-html iframe {
+            width: 100%;
+            border: none;
+            min-height: 400px;
+        }
+        
+        .result-header {
+            padding: 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 0.9em;
+        }
+        
         input[type="file"], input[type="text"] {
             width: 100%;
             padding: 10px;
@@ -389,10 +412,43 @@
     <script>
         const baseURL = window.location.origin;
         
-        function showResult(elementId, content, isSuccess = true) {
+        function showResult(elementId, content, isSuccess = true, isHtml = false) {
             const result = document.getElementById(elementId);
-            result.textContent = content;
             result.className = 'result show ' + (isSuccess ? 'success' : 'error');
+            
+            if (isHtml) {
+                const header = document.createElement('div');
+                header.className = 'result-header';
+                header.textContent = '✓ Success! Status: 200 OK';
+                
+                const htmlContainer = document.createElement('div');
+                htmlContainer.className = 'result-html';
+                
+                const iframe = document.createElement('iframe');
+                iframe.style.width = '100%';
+                iframe.style.border = 'none';
+                iframe.style.minHeight = '400px';
+                
+                result.innerHTML = '';
+                result.appendChild(header);
+                result.appendChild(htmlContainer);
+                htmlContainer.appendChild(iframe);
+                
+                iframe.onload = function() {
+                    try {
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.open();
+                        doc.write(content);
+                        doc.close();
+                    } catch (e) {
+                        iframe.srcdoc = content;
+                    }
+                };
+                
+                iframe.srcdoc = content;
+            } else {
+                result.textContent = content;
+            }
         }
         
         function showLoading(elementId) {
@@ -408,7 +464,14 @@
             showLoading(resultId);
             
             try {
-                const response = await fetch(baseURL + path);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+                
+                const response = await fetch(baseURL + path, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
                 const status = response.status;
                 
                 if (status === 200) {
@@ -417,13 +480,24 @@
                         showResult(resultId, `✓ Success! File size: ${blob.size} bytes\nStatus: ${status} ${response.statusText}`, true);
                     } else {
                         const text = await response.text();
-                        showResult(resultId, `✓ Success!\nStatus: ${status} ${response.statusText}\n\nContent:\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}`, true);
+                        const contentType = response.headers.get('Content-Type') || '';
+                        const isHtmlContent = contentType.includes('text/html') || path.includes('.html');
+                        
+                        if (isHtmlContent) {
+                            showResult(resultId, text, true, true);
+                        } else {
+                            showResult(resultId, `✓ Success!\nStatus: ${status} ${response.statusText}\n\nContent:\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}`, true);
+                        }
                     }
                 } else {
                     showResult(resultId, `✗ Error: ${status} ${response.statusText}`, false);
                 }
             } catch (error) {
-                showResult(resultId, `✗ Error: ${error.message}`, false);
+                if (error.name === 'AbortError') {
+                    showResult(resultId, `✗ Error: Request timeout (file too large or server too slow)`, false);
+                } else {
+                    showResult(resultId, `✗ Error: ${error.message}`, false);
+                }
             }
         }
         
@@ -434,17 +508,34 @@
             showLoading(resultId);
             
             try {
-                const response = await fetch(baseURL + path);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
+                const response = await fetch(baseURL + path, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                
                 const status = response.status;
                 const text = await response.text();
+                const contentType = response.headers.get('Content-Type') || '';
+                const isHtmlContent = contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html');
                 
                 if (status === 200) {
-                    showResult(resultId, `✓ Success!\nStatus: ${status} ${response.statusText}\n\nResponse:\n${text.substring(0, 1000)}${text.length > 1000 ? '...' : ''}`, true);
+                    if (isHtmlContent) {
+                        showResult(resultId, text, true, true);
+                    } else {
+                        showResult(resultId, `✓ Success!\nStatus: ${status} ${response.statusText}\n\nResponse:\n${text.substring(0, 1000)}${text.length > 1000 ? '...' : ''}`, true);
+                    }
                 } else {
                     showResult(resultId, `✗ Error: ${status} ${response.statusText}\n\n${text}`, false);
                 }
             } catch (error) {
-                showResult(resultId, `✗ Error: ${error.message}`, false);
+                if (error.name === 'AbortError') {
+                    showResult(resultId, `✗ Error: Request timeout`, false);
+                } else {
+                    showResult(resultId, `✗ Error: ${error.message}`, false);
+                }
             }
         }
         
