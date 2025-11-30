@@ -1,0 +1,12 @@
+{
+  "name": "webserv",
+  "version": "1.0",
+  "status": "testing",
+  "features": [
+    "HTTP/1.1",
+    "CGI",
+    "Static files",
+    "Uploads"
+  ]
+}
+
