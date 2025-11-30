@@ -278,7 +278,7 @@
                     <div class="test-card">
                         <h3>Large Binary File</h3>
                         <p>Load 1MB binary file</p>
-                        <button onclick="loadStaticFile('/large.bin', true)">Load Binary</button>
+                        <button onclick="loadBinaryFile('/large.bin')">Load Binary</button>
                         <div class="result" id="binary-result"></div>
                     </div>
                 </div>
@@ -457,27 +457,94 @@
             result.className = 'result show pending';
         }
         
+        async function loadBinaryFile(path) {
+            const resultId = 'binary-result';
+            showLoading(resultId);
+            
+            try {
+                const controller = new AbortController();
+                let timeoutId = setTimeout(() => controller.abort(), 30000);
+                
+                const response = await fetch(baseURL + path, {
+                    method: 'HEAD',
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.status === 200) {
+                    const contentLength = response.headers.get('Content-Length');
+                    const sizeBytes = contentLength ? parseInt(contentLength) : 0;
+                    const sizeMB = sizeBytes > 0 ? (sizeBytes / 1024 / 1024).toFixed(2) : 'unknown';
+                    
+                    let message = `✓ File found!\n`;
+                    message += `Status: ${response.status} ${response.statusText}\n`;
+                    message += `File size: ${sizeBytes} bytes (${sizeMB} MB)\n\n`;
+                    message += `For binary files, use direct download:\n`;
+                    
+                    const result = document.getElementById(resultId);
+                    result.innerHTML = message + 
+                        `<a href="${baseURL + path}" download style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #667eea; color: white; text-decoration: none; border-radius: 5px;">Download File</a>`;
+                    result.className = 'result show success';
+                } else {
+                    showResult(resultId, `✗ Error: ${response.status} ${response.statusText}`, false);
+                }
+            } catch (error) {
+                let errorMsg;
+                if (error.name === 'AbortError') {
+                    errorMsg = `✗ Error: Request timeout\n\nTry downloading directly: <a href="${baseURL + path}" download>Download File</a>`;
+                } else {
+                    errorMsg = `✗ Error: ${error.message}\n\nTry downloading directly: <a href="${baseURL + path}" download>Download File</a>`;
+                }
+                
+                const result = document.getElementById(resultId);
+                result.innerHTML = errorMsg;
+                result.className = 'result show error';
+            }
+        }
+        
         async function loadStaticFile(path, isBinary = false) {
             const resultId = path.includes('.html') ? 'html-result' :
                             path.includes('.txt') ? 'text-result' :
                             path.includes('.json') ? 'json-result' : 'binary-result';
             showLoading(resultId);
             
+            let timeoutId = null;
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+                timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
                 
                 const response = await fetch(baseURL + path, {
                     signal: controller.signal
                 });
-                clearTimeout(timeoutId);
+                
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
                 
                 const status = response.status;
                 
                 if (status === 200) {
                     if (isBinary) {
-                        const blob = await response.blob();
-                        showResult(resultId, `✓ Success! File size: ${blob.size} bytes\nStatus: ${status} ${response.statusText}`, true);
+                        try {
+                            const blob = await response.blob();
+                            const sizeBytes = blob.size;
+                            const sizeMB = (sizeBytes / 1024 / 1024).toFixed(2);
+                            
+                            let message = `✓ Success! File loaded successfully\n`;
+                            message += `Status: ${status} ${response.statusText}\n`;
+                            message += `File size: ${sizeBytes} bytes (${sizeMB} MB)\n\n`;
+                            message += `Binary file loaded. For very large files, consider using direct download:\n`;
+                            message += `Download link: ${baseURL + path}`;
+                            
+                            showResult(resultId, message, true);
+                        } catch (blobError) {
+                            const errorMsg = `✗ Error loading file blob: ${blobError.message}\n\n`;
+                            const result = document.getElementById(resultId);
+                            result.innerHTML = errorMsg + `Try downloading directly: <a href="${baseURL + path}" download>Download File</a>`;
+                            result.className = 'result show error';
+                        }
                     } else {
                         const text = await response.text();
                         const contentType = response.headers.get('Content-Type') || '';
@@ -490,14 +557,29 @@
                         }
                     }
                 } else {
-                    showResult(resultId, `✗ Error: ${status} ${response.statusText}`, false);
+                    const errorText = await response.text().catch(() => '');
+                    showResult(resultId, `✗ Error: ${status} ${response.statusText}${errorText ? '\n\n' + errorText.substring(0, 200) : ''}`, false);
                 }
             } catch (error) {
-                if (error.name === 'AbortError') {
-                    showResult(resultId, `✗ Error: Request timeout (file too large or server too slow)`, false);
-                } else {
-                    showResult(resultId, `✗ Error: ${error.message}`, false);
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
                 }
+                
+                let errorMsg;
+                
+                if (error.name === 'AbortError') {
+                    errorMsg = `✗ Error: Request timeout (120 seconds)\n\nThe file may be too large or the server is too slow.\nTry downloading directly: <a href="${baseURL + path}" download>Download File</a>`;
+                } else if (error.message === 'Failed to fetch' || error.message.includes('Failed to fetch')) {
+                    errorMsg = `✗ Error: Failed to fetch\n\nPossible causes:\n- Server is not responding\n- Network connection issue\n- File is too large\n- Connection timeout\n\nTry downloading directly: <a href="${baseURL + path}" download>Download File</a>`;
+                } else if (error.message.includes('network') || error.message.includes('Network')) {
+                    errorMsg = `✗ Error: Network error\n\n${error.message}\n\nTry downloading directly: <a href="${baseURL + path}" download>Download File</a>`;
+                } else {
+                    errorMsg = `✗ Error: ${error.message}\n\nTry downloading directly: <a href="${baseURL + path}" download>Download File</a>`;
+                }
+                
+                const result = document.getElementById(resultId);
+                result.innerHTML = errorMsg;
+                result.className = 'result show error';
             }
         }
         

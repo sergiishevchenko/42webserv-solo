@@ -41,6 +41,14 @@ HttpResponse RequestHandler::handleRequest(const HttpRequest& request, const Con
 
     if (request.method == "GET") {
         response = handleGet(request, *server, location);
+    } else if (request.method == "HEAD") {
+        response = handleGet(request, *server, location);
+        std::string body = response.getBody();
+        std::ostringstream oss;
+        oss << body.size();
+        std::string savedLength = oss.str();
+        response.setBody("");  // HEAD should not have body
+        response.setHeader("Content-Length", savedLength);
     } else if (request.method == "POST") {
         response = handlePost(request, *server, location);
     } else if (request.method == "DELETE") {
@@ -364,9 +372,15 @@ std::string RequestHandler::getContentType(const std::string& file_path) {
 
 bool RequestHandler::isMethodAllowed(const std::string& method, const Location* location) {
     if (!location || location->methods.empty()) {
-        return method == "GET";
+        return method == "GET" || method == "HEAD";
     }
-    return location->methods.find(method) != location->methods.end();
+    if (location->methods.find(method) != location->methods.end()) {
+        return true;
+    }
+    if (method == "HEAD" && location->methods.find("GET") != location->methods.end()) {
+        return true;
+    }
+    return false;
 }
 
 HttpResponse RequestHandler::handleGet(const HttpRequest& request, const ServerConfig& server, const Location* location) {
