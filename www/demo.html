@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>webserv - Interactive Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border-left: 5px solid #667eea;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .test-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .test-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+        
+        .test-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .test-card p {
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        
+        button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            min-height: 50px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+        
+        input[type="file"]:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+        
+        .status.success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .status.error {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .status.pending {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-list li:before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 webserv</h1>
+            <p>HTTP/1.1 Web Server - Interactive Demonstration</p>
+        </header>
+        
+        <div class="content">
+            <!-- Static Files Section -->
+            <div class="section">
+                <h2>📄 Static File Serving</h2>
+                <p>Test serving different types of static files:</p>
+                <div class="test-grid">
+                    <div class="test-card">
+                        <h3>HTML File</h3>
+                        <p>Load test.html</p>
+                        <button onclick="loadStaticFile('/test.html')">Load HTML</button>
+                        <div class="result" id="html-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>Text File</h3>
+                        <p>Load test.txt</p>
+                        <button onclick="loadStaticFile('/test.txt')">Load Text</button>
+                        <div class="result" id="text-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>JSON File</h3>
+                        <p>Load test.json</p>
+                        <button onclick="loadStaticFile('/test.json')">Load JSON</button>
+                        <div class="result" id="json-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>Large Binary File</h3>
+                        <p>Load 1MB binary file</p>
+                        <button onclick="loadStaticFile('/large.bin', true)">Load Binary</button>
+                        <div class="result" id="binary-result"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- CGI Section -->
+            <div class="section">
+                <h2>🐍 CGI Scripts</h2>
+                <p>Test CGI script execution:</p>
+                <div class="test-grid">
+                    <div class="test-card">
+                        <h3>Hello World</h3>
+                        <p>Basic CGI script</p>
+                        <button onclick="testCGI('/cgi/hello.py')">Run Hello</button>
+                        <div class="result" id="cgi-hello-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>Environment Variables</h3>
+                        <p>Show CGI environment</p>
+                        <button onclick="testCGI('/cgi/env.py')">Show Env</button>
+                        <div class="result" id="cgi-env-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>Query String</h3>
+                        <p>Test query parameters</p>
+                        <input type="text" id="query-input" placeholder="Enter query string (e.g., name=value&test=123)">
+                        <button onclick="testCGI('/cgi/query.py?' + document.getElementById('query-input').value)">Test Query</button>
+                        <div class="result" id="cgi-query-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>JSON Response</h3>
+                        <p>CGI returning JSON</p>
+                        <button onclick="testCGI('/cgi/json_response.py')">Get JSON</button>
+                        <div class="result" id="cgi-json-result"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- File Upload Section -->
+            <div class="section">
+                <h2>📤 File Upload</h2>
+                <p>Test POST file upload functionality:</p>
+                <div class="test-grid">
+                    <div class="test-card">
+                        <h3>Upload Text File</h3>
+                        <p>Upload a text file to /uploads/</p>
+                        <input type="file" id="upload-file" accept="*/*">
+                        <button onclick="uploadFile()">Upload File</button>
+                        <div class="result" id="upload-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>Upload Directory Listing</h3>
+                        <p>View uploaded files</p>
+                        <button onclick="listUploads()">List Uploads</button>
+                        <div class="result" id="uploads-list-result"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- DELETE Section -->
+            <div class="section">
+                <h2>🗑️ File Deletion</h2>
+                <p>Test DELETE method:</p>
+                <div class="test-grid">
+                    <div class="test-card">
+                        <h3>Delete File</h3>
+                        <p>Delete a file from uploads</p>
+                        <input type="text" id="delete-file" placeholder="Enter filename (e.g., test.txt)">
+                        <button onclick="deleteFile()">Delete File</button>
+                        <div class="result" id="delete-result"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Redirect Section -->
+            <div class="section">
+                <h2>↪️ Redirects</h2>
+                <p>Test HTTP redirects:</p>
+                <div class="test-grid">
+                    <div class="test-card">
+                        <h3>Test Redirect</h3>
+                        <p>Follow redirect to index</p>
+                        <button onclick="testRedirect()">Test Redirect</button>
+                        <div class="result" id="redirect-result"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Error Handling Section -->
+            <div class="section">
+                <h2>⚠️ Error Handling</h2>
+                <p>Test error responses:</p>
+                <div class="test-grid">
+                    <div class="test-card">
+                        <h3>404 Not Found</h3>
+                        <p>Request non-existent file</p>
+                        <button onclick="testError('/nonexistent.html', 404)">Test 404</button>
+                        <div class="result" id="error-404-result"></div>
+                    </div>
+                    <div class="test-card">
+                        <h3>405 Method Not Allowed</h3>
+                        <p>Use unsupported method</p>
+                        <button onclick="testMethodNotAllowed()">Test 405</button>
+                        <div class="result" id="error-405-result"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Features List -->
+            <div class="section">
+                <h2>✨ Supported Features</h2>
+                <ul class="feature-list">
+                    <li>HTTP/1.1 Protocol with Keep-Alive support</li>
+                    <li>Static file serving (HTML, CSS, JS, images, binary)</li>
+                    <li>CGI/1.1 script execution (Python, PHP, etc.)</li>
+                    <li>File uploads via POST with size limits</li>
+                    <li>File deletion via DELETE method</li>
+                    <li>HTTP redirects (301, 302)</li>
+                    <li>Custom error pages (404, 500, etc.)</li>
+                    <li>Directory listings (autoindex)</li>
+                    <li>Chunked transfer encoding</li>
+                    <li>Multiple server blocks and ports</li>
+                    <li>Virtual host support</li>
+                    <li>Non-blocking I/O with poll()</li>
+                    <li>Connection timeouts and limits</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const baseURL = window.location.origin;
+        
+        function showResult(elementId, content, isSuccess = true) {
+            const result = document.getElementById(elementId);
+            result.textContent = content;
+            result.className = 'result show ' + (isSuccess ? 'success' : 'error');
+        }
+        
+        function showLoading(elementId) {
+            const result = document.getElementById(elementId);
+            result.innerHTML = '<span class="loading"></span>Loading...';
+            result.className = 'result show pending';
+        }
+        
+        async function loadStaticFile(path, isBinary = false) {
+            const resultId = path.includes('.html') ? 'html-result' :
+                            path.includes('.txt') ? 'text-result' :
+                            path.includes('.json') ? 'json-result' : 'binary-result';
+            showLoading(resultId);
+            
+            try {
+                const response = await fetch(baseURL + path);
+                const status = response.status;
+                
+                if (status === 200) {
+                    if (isBinary) {
+                        const blob = await response.blob();
+                        showResult(resultId, `✓ Success! File size: ${blob.size} bytes\nStatus: ${status} ${response.statusText}`, true);
+                    } else {
+                        const text = await response.text();
+                        showResult(resultId, `✓ Success!\nStatus: ${status} ${response.statusText}\n\nContent:\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}`, true);
+                    }
+                } else {
+                    showResult(resultId, `✗ Error: ${status} ${response.statusText}`, false);
+                }
+            } catch (error) {
+                showResult(resultId, `✗ Error: ${error.message}`, false);
+            }
+        }
+        
+        async function testCGI(path) {
+            const resultId = path.includes('hello') ? 'cgi-hello-result' :
+                            path.includes('env') ? 'cgi-env-result' :
+                            path.includes('query') ? 'cgi-query-result' : 'cgi-json-result';
+            showLoading(resultId);
+            
+            try {
+                const response = await fetch(baseURL + path);
+                const status = response.status;
+                const text = await response.text();
+                
+                if (status === 200) {
+                    showResult(resultId, `✓ Success!\nStatus: ${status} ${response.statusText}\n\nResponse:\n${text.substring(0, 1000)}${text.length > 1000 ? '...' : ''}`, true);
+                } else {
+                    showResult(resultId, `✗ Error: ${status} ${response.statusText}\n\n${text}`, false);
+                }
+            } catch (error) {
+                showResult(resultId, `✗ Error: ${error.message}`, false);
+            }
+        }
+        
+        async function uploadFile() {
+            const fileInput = document.getElementById('upload-file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showResult('upload-result', '✗ Please select a file first', false);
+                return;
+            }
+            
+            showLoading('upload-result');
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch(baseURL + '/uploads/' + file.name, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const status = response.status;
+                const text = await response.text();
+                
+                if (status === 201 || status === 200) {
+                    showResult('upload-result', `✓ Upload successful!\nStatus: ${status} ${response.statusText}\n\n${text}`, true);
+                    fileInput.value = '';
+                } else {
+                    showResult('upload-result', `✗ Upload failed: ${status} ${response.statusText}\n\n${text}`, false);
+                }
+            } catch (error) {
+                showResult('upload-result', `✗ Error: ${error.message}`, false);
+            }
+        }
+        
+        async function listUploads() {
+            showLoading('uploads-list-result');
+            
+            try {
+                const response = await fetch(baseURL + '/uploads/');
+                const status = response.status;
+                const text = await response.text();
+                
+                if (status === 200) {
+                    showResult('uploads-list-result', `✓ Success!\nStatus: ${status} ${response.statusText}\n\nDirectory listing:\n${text.substring(0, 2000)}${text.length > 2000 ? '...' : ''}`, true);
+                } else {
+                    showResult('uploads-list-result', `✗ Error: ${status} ${response.statusText}`, false);
+                }
+            } catch (error) {
+                showResult('uploads-list-result', `✗ Error: ${error.message}`, false);
+            }
+        }
+        
+        async function deleteFile() {
+            const filename = document.getElementById('delete-file').value.trim();
+            
+            if (!filename) {
+                showResult('delete-result', '✗ Please enter a filename', false);
+                return;
+            }
+            
+            showLoading('delete-result');
+            
+            try {
+                const response = await fetch(baseURL + '/uploads/' + filename, {
+                    method: 'DELETE'
+                });
+                
+                const status = response.status;
+                const text = await response.text();
+                
+                if (status === 204 || status === 200) {
+                    showResult('delete-result', `✓ File deleted successfully!\nStatus: ${status} ${response.statusText}`, true);
+                    document.getElementById('delete-file').value = '';
+                } else {
+                    showResult('delete-result', `✗ Delete failed: ${status} ${response.statusText}\n\n${text}`, false);
+                }
+            } catch (error) {
+                showResult('delete-result', `✗ Error: ${error.message}`, false);
+            }
+        }
+        
+        async function testRedirect() {
+            showLoading('redirect-result');
+            
+            try {
+                const response = await fetch(baseURL + '/redirect', {
+                    redirect: 'follow'
+                });
+                
+                const status = response.status;
+                const text = await response.text();
+                
+                showResult('redirect-result', `✓ Redirect followed!\nStatus: ${status} ${response.statusText}\n\nFinal URL: ${response.url}\n\nContent preview:\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}`, true);
+            } catch (error) {
+                showResult('redirect-result', `✗ Error: ${error.message}`, false);
+            }
+        }
+        
+        async function testError(path, expectedStatus) {
+            const resultId = expectedStatus === 404 ? 'error-404-result' : 'error-405-result';
+            showLoading(resultId);
+            
+            try {
+                const response = await fetch(baseURL + path);
+                const status = response.status;
+                const text = await response.text();
+                
+                if (status === expectedStatus) {
+                    showResult(resultId, `✓ Correct error status!\nStatus: ${status} ${response.statusText}\n\nError page:\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}`, true);
+                } else {
+                    showResult(resultId, `✗ Unexpected status: ${status} (expected ${expectedStatus})\n\n${text}`, false);
+                }
+            } catch (error) {
+                showResult(resultId, `✗ Error: ${error.message}`, false);
+            }
+        }
+        
+        async function testMethodNotAllowed() {
+            showLoading('error-405-result');
+            
+            try {
+                const response = await fetch(baseURL + '/', {
+                    method: 'DELETE'
+                });
+                
+                const status = response.status;
+                const text = await response.text();
+                
+                if (status === 405) {
+                    showResult('error-405-result', `✓ Correct error status!\nStatus: ${status} ${response.statusText}\n\nError message:\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}`, true);
+                } else {
+                    showResult('error-405-result', `✗ Unexpected status: ${status} (expected 405)\n\n${text}`, false);
+                }
+            } catch (error) {
+                showResult('error-405-result', `✗ Error: ${error.message}`, false);
+            }
+        }
+    </script>
+</body>
+</html>
