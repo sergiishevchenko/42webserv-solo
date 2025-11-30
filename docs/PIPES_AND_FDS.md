@@ -53,6 +53,175 @@ Process File Descriptor Table:
 └─────┴─────────────────────────────────┘
 ```
 
+Each entry points to a **struct file** in the system-wide **open file table**.
+
+### struct file - Kernel File Structure
+
+**struct file** is a fundamental kernel data structure that represents an open file, socket, pipe, or other I/O resource. It's the bridge between a file descriptor (user-space) and the actual resource (kernel-space).
+
+**Definition (simplified):**
+```c
+struct file {
+    union {
+        struct llist_node   fu_llist;  // List node for RCU
+        struct rcu_head     fu_rcuhead; // RCU cleanup
+    } f_u;
+    
+    struct path             f_path;     // Path to file
+    struct inode           *f_inode;    // Pointer to inode
+    const struct file_operations *f_op;  // File operations
+    
+    atomic_long_t          f_count;     // Reference count
+    unsigned int           f_flags;     // File flags (O_RDONLY, O_NONBLOCK, etc.)
+    fmode_t                f_mode;      // File mode (read/write)
+    loff_t                 f_pos;       // File position (offset)
+    
+    struct fown_struct     f_owner;     // Owner (for signals)
+    const struct cred      *f_cred;     // Credentials
+    
+    void                   *private_data; // Private data for driver/fs
+    
+    // ... other fields ...
+};
+```
+
+**Key Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `f_inode` | `struct inode*` | Pointer to the inode (file metadata) |
+| `f_op` | `struct file_operations*` | Function pointers for file operations (read, write, poll, etc.) |
+| `f_count` | `atomic_long_t` | Reference count (how many FDs point to this struct file) |
+| `f_flags` | `unsigned int` | File flags: `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_NONBLOCK`, `O_CLOEXEC`, etc. |
+| `f_mode` | `fmode_t` | File mode: read/write permissions |
+| `f_pos` | `loff_t` | Current file position (offset) for regular files |
+| **`private_data`** | `void*` | **Private data pointer - key for driver/FS-specific data** |
+
+### private_data Field
+
+**`private_data`** is a crucial field that allows different kernel subsystems to store type-specific data:
+
+**For Pipes:**
+```c
+// When pipe is opened, private_data points to pipe_inode_info
+struct file *file = ...;
+file->private_data = pipe;  // Points to pipe_inode_info structure
+```
+
+**For Sockets:**
+```c
+// For sockets, private_data points to socket structure
+struct file *file = ...;
+file->private_data = sock;  // Points to struct socket
+```
+
+**For Regular Files:**
+```c
+// For regular files, private_data may be NULL or point to filesystem-specific data
+struct file *file = ...;
+file->private_data = NULL;  // Or filesystem-specific structure
+```
+
+**Usage Pattern:**
+```c
+// In pipe_read() function:
+static ssize_t pipe_read(struct kiocb *iocb, struct iov_iter *iter) {
+    struct file *file = iocb->ki_filp;
+    struct pipe_inode_info *pipe = file->private_data;  // Get pipe from private_data
+    
+    // Now can access pipe->head, pipe->tail, pipe->bufs, etc.
+    // ...
+}
+```
+
+### File Descriptor → struct file Flow
+
+```
+User-space call: read(fd, buf, size)
+         │
+         ▼
+┌────────────────────────────────────────┐
+│ 1. Process FD Table                    │
+│    fd → struct file*                   │
+└────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────┐
+│ 2. struct file                         │
+│    - f_op → file_operations            │
+│    - f_inode → inode                   │
+│    - private_data → specific data      │
+└────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────┐
+│ 3. file->f_op->read_iter()             │
+│    Uses file->private_data to get      │
+│    pipe/socket/file-specific data      │
+└────────────────────────────────────────┘
+```
+
+### struct file for Different Resource Types
+
+**Pipes:**
+```c
+struct file *pipe_file;
+pipe_file->f_op = &pipefifo_fops;        // Pipe operations
+pipe_file->f_inode = pipe_inode;         // Pipe inode
+pipe_file->private_data = pipe_inode_info; // Pipe-specific data
+pipe_file->f_flags = O_RDONLY | O_NONBLOCK;
+```
+
+**Sockets:**
+```c
+struct file *socket_file;
+socket_file->f_op = &socket_file_ops;   // Socket operations
+socket_file->f_inode = socket_inode;     // Socket inode
+socket_file->private_data = socket;       // struct socket
+socket_file->f_flags = O_RDWR | O_NONBLOCK;
+```
+
+**Regular Files:**
+```c
+struct file *regular_file;
+regular_file->f_op = &def_blk_fops;      // Block device operations
+regular_file->f_inode = file_inode;      // File inode
+regular_file->private_data = NULL;        // Or filesystem-specific
+regular_file->f_pos = 0;                  // Current file offset
+```
+
+### Reference Counting
+
+**struct file** uses reference counting (`f_count`):
+
+```c
+// When FD is duplicated (dup, fork, etc.)
+struct file *file = get_file(old_file);  // Increments f_count
+
+// When FD is closed
+fput(file);  // Decrements f_count, frees if reaches 0
+```
+
+**Lifecycle:**
+1. `open()` / `socket()` / `pipe()` → Creates `struct file`, `f_count = 1`
+2. `dup()` / `fork()` → Increments `f_count`
+3. `close()` → Decrements `f_count`
+4. When `f_count == 0` → `f_op->release()` called, `struct file` freed
+
+### Why private_data is Important
+
+**private_data** allows the same `struct file` interface to work with different resource types:
+
+- **Polymorphism**: Same `struct file` structure for files, sockets, pipes
+- **Type-specific data**: Each type stores its own data structure
+- **Clean separation**: File operations use `private_data` to access type-specific data
+- **Extensibility**: New resource types can use `private_data` without changing `struct file`
+
+**Example in webserv context:**
+- When webserv opens a pipe for CGI: `file->private_data` points to `pipe_inode_info`
+- When webserv accepts a socket: `file->private_data` points to `struct socket`
+- When webserv opens a file: `file->private_data` may be NULL or filesystem-specific
+
 Each entry points to an entry in the system-wide **open file table**, which contains:
 - File status flags (read/write mode, append, etc.)
 - File offset (current position)
