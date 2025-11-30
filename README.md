@@ -342,6 +342,22 @@ The demo page provides a user-friendly interface to test:
 - Error handling (404, 405)
 - Directory listings
 
+#### Demo Screenshots
+
+<div align="center">
+
+![Demo Screenshot 1](images/1.png)
+
+![Demo Screenshot 2](images/2.png)
+
+![Demo Screenshot 3](images/3.png)
+
+![Demo Screenshot 4](images/4.png)
+
+![Demo Screenshot 5](images/5.png)
+
+</div>
+
 ### Manual Testing
 
 ```bash
