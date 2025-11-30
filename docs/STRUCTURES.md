@@ -902,6 +902,12 @@ int client_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
 - Connections are automatically tracked for timeout handling
 - The server uses `poll()` for event-driven I/O (compatible with Linux and macOS)
 
+## Related Documentation
+
+- [File Descriptors](FILE_DESCRIPTORS.md) - **Key architectural decision**: Files are read synchronously into memory and NOT tracked in poll(), while sockets use non-blocking I/O via poll()
+- [Pipes and File Descriptors](PIPES_AND_FDS.md) - Detailed explanation of pipes and their relationship with file descriptors
+- [CGI Pipes and File Descriptors](CGI_PIPES.md) - CGI-specific pipe implementation details
+
 ---
 
 ### HttpResponse
