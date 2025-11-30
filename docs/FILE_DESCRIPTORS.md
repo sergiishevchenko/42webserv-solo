@@ -152,10 +152,175 @@ void Server::printFileDescriptors() {
 }
 ```
 
+## File I/O Architecture in webserv
+
+### Key Design Decision: File Descriptors vs Socket Descriptors
+
+**Critical Architecture Point:** The server uses **two different I/O models** for different resource types:
+
+1. **Socket Descriptors (Network I/O)**: Non-blocking, event-driven via `poll()`
+   - All socket file descriptors are tracked in `poll_fds_` vector
+   - Managed through the event loop
+   - Supports concurrent connections
+   - Non-blocking mode (`O_NONBLOCK`)
+
+2. **File Descriptors (Disk I/O)**: Synchronous, blocking, NOT in `poll()`
+   - Files are **NOT** tracked in `poll_fds_`
+   - Files are read completely into memory before sending
+   - Uses C++ streams (`std::ifstream`, `std::ofstream`)
+   - Blocking mode (default)
+
+### Why Files Are NOT in poll()
+
+**Architectural Reasons:**
+
+1. **Performance**: File I/O is typically fast (disk cache, SSD)
+   - Reading entire file into memory completes quickly
+   - No need for complex async file handling
+
+2. **Simplicity**: Synchronous file operations are easier to manage
+   - No need to track file descriptors in poll()
+   - Simpler error handling
+   - Avoids file descriptor exhaustion
+
+3. **Resource Management**: Files are opened, used, and closed immediately
+   - File descriptors don't accumulate
+   - No risk of FD leaks from file operations
+   - Each file operation is self-contained
+
+4. **Separation of Concerns**: Network I/O and file I/O have different characteristics
+   - Network: slow, unpredictable, needs async handling
+   - Files: fast, predictable, can be synchronous
+
+### File Descriptor Lifecycle
+
+**Static File Serving:**
+
+```
+1. Request arrives → Socket FD (in poll())
+2. Parse request → Still using socket FD
+3. Open file → File FD created (NOT in poll())
+4. Read entire file → Synchronous, blocking
+5. Close file → File FD closed immediately
+6. Send response → Socket FD (in poll(), non-blocking write)
+```
+
+**File Upload:**
+
+```
+1. Request arrives → Socket FD (in poll())
+2. Parse request body → Socket FD (in poll())
+3. Open upload file → File FD created (NOT in poll())
+4. Write entire body → Synchronous, blocking
+5. Close file → File FD closed immediately
+6. Send response → Socket FD (in poll(), non-blocking write)
+```
+
+### What IS Tracked in poll()
+
+**Tracked File Descriptors:**
+- ✅ Listening sockets (one per server block/port)
+- ✅ Client connection sockets (one per active connection)
+- ✅ CGI pipes (stdin/stdout) - handled by CgiHandler
+
+**NOT Tracked File Descriptors:**
+- ❌ Static file descriptors (`std::ifstream` for reading files)
+- ❌ Upload file descriptors (`std::ofstream` for writing files)
+- ❌ Configuration file descriptors
+- ❌ Directory descriptors (`opendir()` for directory listing)
+- ❌ Error page file descriptors
+
+### Code Example
+
+**File Reading (NOT in poll()):**
+
+```cpp
+// RequestHandler::serveFile()
+std::ifstream file(file_path.c_str(), std::ios::binary);
+// File FD opened here, but NOT added to poll_fds_
+
+file.seekg(0, std::ios::end);
+std::streamsize size = file.tellg();
+file.seekg(0, std::ios::beg);
+
+std::vector<char> buffer(static_cast<std::size_t>(size));
+file.read(buffer.data(), size);  // Blocking read
+file.close();  // File FD closed immediately
+
+// Response sent via socket (which IS in poll())
+response.setBody(buffer.data(), static_cast<std::size_t>(size));
+```
+
+**Socket I/O (IS in poll()):**
+
+```cpp
+// Server::acceptNewConnection()
+int client_fd = socket->accept();
+fcntl(client_fd, F_SETFL, O_NONBLOCK);  // Non-blocking
+
+Connection* conn = new Connection(client_fd, ...);
+connections_[client_fd] = conn;
+addPollFd(client_fd, POLLIN | POLLOUT);  // Added to poll()
+```
+
+### Implications
+
+**Advantages:**
+- ✅ Simpler code (no file FD management in poll())
+- ✅ Predictable behavior (file operations complete quickly)
+- ✅ Easier error handling (synchronous operations)
+- ✅ No file descriptor leaks (files closed immediately)
+- ✅ Lower FD count (only sockets tracked)
+
+**Limitations:**
+- ⚠️ Large files consume memory (entire file in RAM)
+- ⚠️ File I/O blocks the event loop briefly (but files read fast)
+- ⚠️ Not suitable for very large files (>100MB) without optimization
+- ⚠️ No streaming for large file transfers
+
+### Monitoring File Descriptors
+
+When monitoring webserv file descriptors, you'll see:
+
+**Typical FD Distribution:**
+- FD 0-2: Standard I/O (stdin, stdout, stderr)
+- FD 3+: Listening sockets (one per port)
+- FD 10+: Client sockets (dynamic, one per connection)
+- **No file FDs visible** (they're opened and closed too quickly)
+
+**Why You Don't See File FDs:**
+- Files are opened, read/written, and closed in the same function call
+- File operations complete before the next poll() iteration
+- File descriptors are ephemeral (exist for milliseconds)
+
+### For Very Large Files
+
+**Current Implementation:**
+- Loads entire file into memory
+- Suitable for files up to ~100MB (depending on `client_max_body_size`)
+
+**Future Optimizations:**
+- Use `sendfile()` on Linux (zero-copy, kernel-to-kernel transfer)
+- Stream file reads in chunks (would require adding file FDs to poll())
+- Implement range requests (HTTP Range header)
+
+### Comparison Table
+
+| Aspect | Socket FDs | File FDs |
+|--------|-----------|----------|
+| **Tracked in poll()** | ✅ Yes | ❌ No |
+| **Blocking Mode** | Non-blocking | Blocking |
+| **I/O Model** | Event-driven | Synchronous |
+| **Lifetime** | Long (connection duration) | Short (operation duration) |
+| **Concurrency** | Multiple simultaneous | One at a time |
+| **Memory Usage** | Small buffers | Entire file |
+| **Error Handling** | Async (via poll events) | Sync (immediate) |
+
 ## Related Documentation
 
 - [Pipes and File Descriptors](PIPES_AND_FDS.md) - Detailed explanation of pipes and their relationship with file descriptors
 - [CGI Pipes and File Descriptors](CGI_PIPES.md) - CGI-specific pipe implementation details
+- [Structures](STRUCTURES.md) - Data structures and classes reference
 
 ## References
 
