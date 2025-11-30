@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <cstring>
 #include <cerrno>
 
@@ -16,15 +17,19 @@ bool Socket::setNonBlocking() {
     if (fd_ < 0) {
         return false;
     }
-    int flags = fcntl(fd_, F_GETFL, 0);
-    if (flags < 0) {
-        LOG_ERROR() << "fcntl F_GETFL failed: " << strerror(errno) << std::endl;
-        return false;
-    }
-    if (fcntl(fd_, F_SETFL, flags | O_NONBLOCK) < 0) {
-        LOG_ERROR() << "fcntl F_SETFL O_NONBLOCK failed: " << strerror(errno)
-                    << std::endl;
-        return false;
+    int flags = 1;
+    if (ioctl(fd_, FIONBIO, &flags) < 0) {
+        // Fallback to fcntl if ioctl fails
+        int fcntl_flags = fcntl(fd_, F_GETFL, 0);
+        if (fcntl_flags < 0) {
+            LOG_ERROR() << "fcntl F_GETFL failed: " << strerror(errno) << std::endl;
+            return false;
+        }
+        if (fcntl(fd_, F_SETFL, fcntl_flags | O_NONBLOCK) < 0) {
+            LOG_ERROR() << "fcntl F_SETFL O_NONBLOCK failed: " << strerror(errno)
+                        << std::endl;
+            return false;
+        }
     }
     return true;
 }
@@ -47,6 +52,11 @@ bool Socket::setCloseOnExec() {
 }
 
 bool Socket::bind(const std::string& host, int port) {
+    // Close any existing socket
+    if (fd_ >= 0) {
+        close();
+    }
+
     fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (fd_ < 0) {
         LOG_ERROR() << "socket() failed: " << strerror(errno) << std::endl;
@@ -62,11 +72,13 @@ bool Socket::bind(const std::string& host, int port) {
     }
 
     if (!setNonBlocking()) {
+        LOG_ERROR() << "setNonBlocking() failed: " << strerror(errno) << std::endl;
         close();
         return false;
     }
 
     if (!setCloseOnExec()) {
+        LOG_ERROR() << "setCloseOnExec() failed: " << strerror(errno) << std::endl;
         close();
         return false;
     }
