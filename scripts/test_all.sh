@@ -261,19 +261,19 @@ main() {
     # Test 1: Basic configuration
     print_info "Test 1: Basic configuration (test_valid.conf)"
     if start_server "$CONFIG_DIR/test_valid.conf"; then
-        test_static_file "/"
-        test_static_file "/index.html"
-        test_static_file "/test.html"
-        test_static_file "/test.txt"
-        test_static_file "/test.json"
-        test_static_file "/nonexistent.html" "404"
-        test_cgi "/cgi/hello.py"
-        test_upload
-        test_delete
-        test_redirect
-        test_large_file
-        test_parallel
-        test_chunked
+        test_static_file "/" || true
+        test_static_file "/index.html" || true
+        test_static_file "/test.html" || true
+        test_static_file "/test.txt" || true
+        test_static_file "/test.json" || true
+        test_static_file "/nonexistent.html" "404" || true
+        test_cgi "/cgi/hello.py" || true
+        test_upload || true
+        test_delete || true
+        test_redirect || true
+        test_large_file || true
+        test_parallel || true
+        test_chunked || true
         cleanup
         sleep 1
     fi
@@ -281,9 +281,9 @@ main() {
     # Test 2: CGI configuration
     print_info "Test 2: CGI configuration (test_cgi.conf)"
     if start_server "$CONFIG_DIR/test_cgi.conf"; then
-        test_cgi "/cgi/hello.py"
-        test_cgi "/cgi/env.py"
-        test_cgi "/cgi/query.py?test=value"
+        test_cgi "/cgi/hello.py" || true
+        test_cgi "/cgi/env.py" || true
+        test_cgi "/cgi/query.py?test=value" || true
         cleanup
         sleep 1
     fi
@@ -291,7 +291,7 @@ main() {
     # Test 3: Multi-port configuration
     print_info "Test 3: Multi-port configuration (test_multiport.conf)"
     if start_server "$CONFIG_DIR/test_multiport.conf"; then
-        test_static_file "/"
+        test_static_file "/" || true
         cleanup
         sleep 1
     fi
@@ -299,7 +299,7 @@ main() {
     # Test 4: Stress test
     print_info "Test 4: Stress test"
     if start_server "$CONFIG_DIR/test_valid.conf"; then
-        run_stress_test
+        run_stress_test || true
         cleanup
     fi
     
