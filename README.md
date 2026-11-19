@@ -2,6 +2,14 @@
 
 HTTP/1.1 web server developed individually as part of the 42 project. Implements a non-blocking event-driven architecture with support for multiple clients, CGI scripts, redirects, and flexible configuration.
 
+<div align="center">
+
+![Demo Screenshot 1](images/1.png)
+
+![Demo Screenshot 2](images/2.png)
+
+</div>
+
 ## Features
 
 ### HTTP Protocol
@@ -55,173 +63,6 @@ HTTP/1.1 web server developed individually as part of the 42 project. Implements
 - C++98 compatible compiler (clang++ or g++)
 - POSIX-compatible operating system (macOS, Linux)
 - Python 3 (for CGI scripts, optional)
-
-## Project Structure
-
-```
-.
-├── src/           # Source files
-├── include/       # Header files
-├── config/        # Configuration examples
-├── www/           # Document root
-│   ├── cgi/       # CGI test scripts
-│   └── uploads/   # Upload directory
-├── docs/          # Documentation
-├── scripts/       # Utility scripts
-└── Makefile       # Build configuration
-```
-
-## Architecture
-
-### Component Overview
-
-```mermaid
-flowchart TB
-    subgraph Entry[" "]
-        MAIN["main.cpp"]
-    end
-
-    MAIN --> CFG["ConfigParser"]
-    MAIN --> SRV["Server"]
-
-    CFG -->|"ServerConfig"| SRV
-
-    SRV --> SOCK["Socket"]
-    SRV --> CONN["Connection"]
-    SRV --> LOG["Logger"]
-
-    CONN --> RP["RequestParser"]
-    RP --> RH["RequestHandler"]
-    RH --> CGI["CgiHandler"]
-    RH --> RESP["HttpResponse"]
-
-    SOCK -.->|"bind / listen / accept"| NET["Network"]
-    SRV -.->|"poll() event loop"| NET
-
-    style MAIN fill:#1a1a2e,stroke:#e94560,color:#eee
-    style SRV fill:#16213e,stroke:#0f3460,color:#eee
-    style CFG fill:#0f3460,stroke:#533483,color:#eee
-    style RH fill:#533483,stroke:#e94560,color:#eee
-    style CGI fill:#e94560,stroke:#1a1a2e,color:#fff
-    style RESP fill:#0f3460,stroke:#533483,color:#eee
-```
-
-### Event Loop
-
-```mermaid
-flowchart LR
-    A["Start"] --> B["poll()"]
-    B --> C{"Events?"}
-    C -->|"none"| D["Check timeouts"]
-    D --> B
-    C -->|"POLLIN on listen"| E["accept()"]
-    E --> B
-    C -->|"POLLIN on client"| F["recv() + parse"]
-    F --> G{"Request ready?"}
-    G -->|no| B
-    G -->|yes| H["RequestHandler"]
-    H --> I["Queue response"]
-    I --> B
-    C -->|"POLLOUT"| J["send()"]
-    J --> K{"Keep-Alive?"}
-    K -->|yes| B
-    K -->|no| L["close()"]
-    L --> B
-
-    style A fill:#1a1a2e,stroke:#e94560,color:#eee
-    style B fill:#16213e,stroke:#0f3460,color:#eee
-    style H fill:#533483,stroke:#e94560,color:#eee
-    style J fill:#0f3460,stroke:#533483,color:#eee
-```
-
-### Request Lifecycle
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
-    participant P as RequestParser
-    participant H as RequestHandler
-    participant R as HttpResponse
-
-    C->>S: TCP connect
-    S->>S: accept() + add to poll
-    C->>S: HTTP request bytes
-    S->>P: feed buffer
-    P->>P: parse start-line, headers, body
-    P-->>S: HttpRequest ready
-    S->>H: handle(request)
-    alt redirect
-        H->>R: 301 / 302 + Location
-    else CGI
-        H->>H: fork / execve CGI
-        H->>R: CGI stdout as response
-    else static / upload / delete
-        H->>R: file or status body
-    end
-    R-->>S: serialized response
-    S->>C: send()
-    alt Keep-Alive
-        S->>S: wait for next request
-    else
-        S->>C: close connection
-    end
-```
-
-### Request Routing
-
-```mermaid
-flowchart TD
-    REQ["Incoming HttpRequest"] --> MATCH["Match server + location"]
-    MATCH --> METH{"Method allowed?"}
-    METH -->|no| E405["405 Method Not Allowed"]
-    METH -->|yes| REDIR{"return / redirect?"}
-    REDIR -->|yes| R3xx["301 / 302 Location"]
-    REDIR -->|no| CGIQ{"cgi_pass match?"}
-    CGIQ -->|yes| CGIR["CgiHandler"]
-    CGIQ -->|no| METH2{"Method"}
-    METH2 -->|GET| GET["Static file / index / autoindex"]
-    METH2 -->|POST| POST["Upload to upload_store"]
-    METH2 -->|DELETE| DEL["Delete file"]
-    GET --> OK["HttpResponse"]
-    POST --> OK
-    DEL --> OK
-    CGIR --> OK
-    R3xx --> OK
-    E405 --> OK
-
-    style REQ fill:#1a1a2e,stroke:#e94560,color:#eee
-    style OK fill:#0f3460,stroke:#533483,color:#eee
-    style CGIR fill:#e94560,stroke:#1a1a2e,color:#fff
-    style R3xx fill:#533483,stroke:#e94560,color:#eee
-```
-
-### CGI Pipeline
-
-```mermaid
-flowchart LR
-    subgraph Parent["Server process"]
-        H["CgiHandler"]
-        ENV["Build CGI env"]
-        IN["stdin pipe"]
-        OUT["stdout pipe"]
-    end
-
-    subgraph Child["CGI process"]
-        EXEC["execve interpreter + script"]
-    end
-
-    H --> ENV
-    H -->|"fork()"| Child
-    H -->|"request body"| IN
-    IN --> EXEC
-    EXEC --> OUT
-    OUT -->|"parse CGI headers + body"| RESP["HttpResponse"]
-
-    style H fill:#16213e,stroke:#0f3460,color:#eee
-    style EXEC fill:#e94560,stroke:#1a1a2e,color:#fff
-    style RESP fill:#0f3460,stroke:#533483,color:#eee
-```
 
 ## Building
 
@@ -297,13 +138,7 @@ The demo page provides an interactive interface to test all features:
 - Error handling (404, 405)
 - Directory listings
 
-#### Demo Screenshots
-
 <div align="center">
-
-![Demo Screenshot 1](images/1.png)
-
-![Demo Screenshot 2](images/2.png)
 
 ![Demo Screenshot 3](images/3.png)
 
@@ -509,6 +344,173 @@ The project includes test CGI scripts in `www/cgi/`:
 - `redirect.py` - CGI redirect example
 
 See [www/cgi/README.md](www/cgi/README.md) for details on using and testing CGI scripts.
+
+## Architecture
+
+### Project Structure
+
+```
+.
+├── src/           # Source files
+├── include/       # Header files
+├── config/        # Configuration examples
+├── www/           # Document root
+│   ├── cgi/       # CGI test scripts
+│   └── uploads/   # Upload directory
+├── docs/          # Documentation
+├── scripts/       # Utility scripts
+└── Makefile       # Build configuration
+```
+
+### Component Overview
+
+```mermaid
+flowchart TB
+    subgraph Entry[" "]
+        MAIN["main.cpp"]
+    end
+
+    MAIN --> CFG["ConfigParser"]
+    MAIN --> SRV["Server"]
+
+    CFG -->|"ServerConfig"| SRV
+
+    SRV --> SOCK["Socket"]
+    SRV --> CONN["Connection"]
+    SRV --> LOG["Logger"]
+
+    CONN --> RP["RequestParser"]
+    RP --> RH["RequestHandler"]
+    RH --> CGI["CgiHandler"]
+    RH --> RESP["HttpResponse"]
+
+    SOCK -.->|"bind / listen / accept"| NET["Network"]
+    SRV -.->|"poll() event loop"| NET
+
+    style MAIN fill:#1a1a2e,stroke:#e94560,color:#eee
+    style SRV fill:#16213e,stroke:#0f3460,color:#eee
+    style CFG fill:#0f3460,stroke:#533483,color:#eee
+    style RH fill:#533483,stroke:#e94560,color:#eee
+    style CGI fill:#e94560,stroke:#1a1a2e,color:#fff
+    style RESP fill:#0f3460,stroke:#533483,color:#eee
+```
+
+### Event Loop
+
+```mermaid
+flowchart LR
+    A["Start"] --> B["poll()"]
+    B --> C{"Events?"}
+    C -->|"none"| D["Check timeouts"]
+    D --> B
+    C -->|"POLLIN on listen"| E["accept()"]
+    E --> B
+    C -->|"POLLIN on client"| F["recv() + parse"]
+    F --> G{"Request ready?"}
+    G -->|no| B
+    G -->|yes| H["RequestHandler"]
+    H --> I["Queue response"]
+    I --> B
+    C -->|"POLLOUT"| J["send()"]
+    J --> K{"Keep-Alive?"}
+    K -->|yes| B
+    K -->|no| L["close()"]
+    L --> B
+
+    style A fill:#1a1a2e,stroke:#e94560,color:#eee
+    style B fill:#16213e,stroke:#0f3460,color:#eee
+    style H fill:#533483,stroke:#e94560,color:#eee
+    style J fill:#0f3460,stroke:#533483,color:#eee
+```
+
+### Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant P as RequestParser
+    participant H as RequestHandler
+    participant R as HttpResponse
+
+    C->>S: TCP connect
+    S->>S: accept() + add to poll
+    C->>S: HTTP request bytes
+    S->>P: feed buffer
+    P->>P: parse start-line, headers, body
+    P-->>S: HttpRequest ready
+    S->>H: handle(request)
+    alt redirect
+        H->>R: 301 / 302 + Location
+    else CGI
+        H->>H: fork / execve CGI
+        H->>R: CGI stdout as response
+    else static / upload / delete
+        H->>R: file or status body
+    end
+    R-->>S: serialized response
+    S->>C: send()
+    alt Keep-Alive
+        S->>S: wait for next request
+    else
+        S->>C: close connection
+    end
+```
+
+### Request Routing
+
+```mermaid
+flowchart TD
+    REQ["Incoming HttpRequest"] --> MATCH["Match server + location"]
+    MATCH --> METH{"Method allowed?"}
+    METH -->|no| E405["405 Method Not Allowed"]
+    METH -->|yes| REDIR{"return / redirect?"}
+    REDIR -->|yes| R3xx["301 / 302 Location"]
+    REDIR -->|no| CGIQ{"cgi_pass match?"}
+    CGIQ -->|yes| CGIR["CgiHandler"]
+    CGIQ -->|no| METH2{"Method"}
+    METH2 -->|GET| GET["Static file / index / autoindex"]
+    METH2 -->|POST| POST["Upload to upload_store"]
+    METH2 -->|DELETE| DEL["Delete file"]
+    GET --> OK["HttpResponse"]
+    POST --> OK
+    DEL --> OK
+    CGIR --> OK
+    R3xx --> OK
+    E405 --> OK
+
+    style REQ fill:#1a1a2e,stroke:#e94560,color:#eee
+    style OK fill:#0f3460,stroke:#533483,color:#eee
+    style CGIR fill:#e94560,stroke:#1a1a2e,color:#fff
+    style R3xx fill:#533483,stroke:#e94560,color:#eee
+```
+
+### CGI Pipeline
+
+```mermaid
+flowchart LR
+    subgraph Parent["Server process"]
+        H["CgiHandler"]
+        ENV["Build CGI env"]
+        IN["stdin pipe"]
+        OUT["stdout pipe"]
+    end
+
+    subgraph Child["CGI process"]
+        EXEC["execve interpreter + script"]
+    end
+
+    H --> ENV
+    H -->|"fork()"| Child
+    H -->|"request body"| IN
+    IN --> EXEC
+    EXEC --> OUT
+    OUT -->|"parse CGI headers + body"| RESP["HttpResponse"]
+
+    style H fill:#16213e,stroke:#0f3460,color:#eee
+    style EXEC fill:#e94560,stroke:#1a1a2e,color:#fff
+    style RESP fill:#0f3460,stroke:#533483,color:#eee
+```
 
 ## Code Quality
 
