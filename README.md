@@ -496,13 +496,6 @@ curl -v --keepalive-time 2 http://127.0.0.1:8080/
 echo -e "5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n" | nc 127.0.0.1 8080
 ```
 
-### Testing Documentation
-
-For detailed testing instructions, see:
-- [TESTING.md](docs/TESTING.md) - General testing guide
-- [TESTING_REDIRECTS.md](docs/TESTING_REDIRECTS.md) - Redirect testing guide
-- [COMPREHENSIVE_TESTING.md](docs/COMPREHENSIVE_TESTING.md) - Comprehensive testing documentation
-
 ## CGI Scripts
 
 The project includes test CGI scripts in `www/cgi/`:
