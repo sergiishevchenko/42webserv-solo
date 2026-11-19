@@ -50,6 +50,179 @@ HTTP/1.1 web server developed individually as part of the 42 project. Implements
 - ✅ **Connection Timeouts** - Automatic cleanup of idle connections
 - ✅ **Request Timeouts** - Protection against slow requests
 
+## Requirements
+
+- C++98 compatible compiler (clang++ or g++)
+- POSIX-compatible operating system (macOS, Linux)
+- Python 3 (for CGI scripts, optional)
+
+## Project Structure
+
+```
+.
+├── src/           # Source files
+├── include/       # Header files
+├── config/        # Configuration examples
+├── www/           # Document root
+│   ├── cgi/       # CGI test scripts
+│   └── uploads/   # Upload directory
+├── docs/          # Documentation
+├── scripts/       # Utility scripts
+└── Makefile       # Build configuration
+```
+
+## Architecture
+
+### Component Overview
+
+```mermaid
+flowchart TB
+    subgraph Entry[" "]
+        MAIN["main.cpp"]
+    end
+
+    MAIN --> CFG["ConfigParser"]
+    MAIN --> SRV["Server"]
+
+    CFG -->|"ServerConfig"| SRV
+
+    SRV --> SOCK["Socket"]
+    SRV --> CONN["Connection"]
+    SRV --> LOG["Logger"]
+
+    CONN --> RP["RequestParser"]
+    RP --> RH["RequestHandler"]
+    RH --> CGI["CgiHandler"]
+    RH --> RESP["HttpResponse"]
+
+    SOCK -.->|"bind / listen / accept"| NET["Network"]
+    SRV -.->|"poll() event loop"| NET
+
+    style MAIN fill:#1a1a2e,stroke:#e94560,color:#eee
+    style SRV fill:#16213e,stroke:#0f3460,color:#eee
+    style CFG fill:#0f3460,stroke:#533483,color:#eee
+    style RH fill:#533483,stroke:#e94560,color:#eee
+    style CGI fill:#e94560,stroke:#1a1a2e,color:#fff
+    style RESP fill:#0f3460,stroke:#533483,color:#eee
+```
+
+### Event Loop
+
+```mermaid
+flowchart LR
+    A["Start"] --> B["poll()"]
+    B --> C{"Events?"}
+    C -->|"none"| D["Check timeouts"]
+    D --> B
+    C -->|"POLLIN on listen"| E["accept()"]
+    E --> B
+    C -->|"POLLIN on client"| F["recv() + parse"]
+    F --> G{"Request ready?"}
+    G -->|no| B
+    G -->|yes| H["RequestHandler"]
+    H --> I["Queue response"]
+    I --> B
+    C -->|"POLLOUT"| J["send()"]
+    J --> K{"Keep-Alive?"}
+    K -->|yes| B
+    K -->|no| L["close()"]
+    L --> B
+
+    style A fill:#1a1a2e,stroke:#e94560,color:#eee
+    style B fill:#16213e,stroke:#0f3460,color:#eee
+    style H fill:#533483,stroke:#e94560,color:#eee
+    style J fill:#0f3460,stroke:#533483,color:#eee
+```
+
+### Request Lifecycle
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant P as RequestParser
+    participant H as RequestHandler
+    participant R as HttpResponse
+
+    C->>S: TCP connect
+    S->>S: accept() + add to poll
+    C->>S: HTTP request bytes
+    S->>P: feed buffer
+    P->>P: parse start-line, headers, body
+    P-->>S: HttpRequest ready
+    S->>H: handle(request)
+    alt redirect
+        H->>R: 301 / 302 + Location
+    else CGI
+        H->>H: fork / execve CGI
+        H->>R: CGI stdout as response
+    else static / upload / delete
+        H->>R: file or status body
+    end
+    R-->>S: serialized response
+    S->>C: send()
+    alt Keep-Alive
+        S->>S: wait for next request
+    else
+        S->>C: close connection
+    end
+```
+
+### Request Routing
+
+```mermaid
+flowchart TD
+    REQ["Incoming HttpRequest"] --> MATCH["Match server + location"]
+    MATCH --> METH{"Method allowed?"}
+    METH -->|no| E405["405 Method Not Allowed"]
+    METH -->|yes| REDIR{"return / redirect?"}
+    REDIR -->|yes| R3xx["301 / 302 Location"]
+    REDIR -->|no| CGIQ{"cgi_pass match?"}
+    CGIQ -->|yes| CGIR["CgiHandler"]
+    CGIQ -->|no| METH2{"Method"}
+    METH2 -->|GET| GET["Static file / index / autoindex"]
+    METH2 -->|POST| POST["Upload to upload_store"]
+    METH2 -->|DELETE| DEL["Delete file"]
+    GET --> OK["HttpResponse"]
+    POST --> OK
+    DEL --> OK
+    CGIR --> OK
+    R3xx --> OK
+    E405 --> OK
+
+    style REQ fill:#1a1a2e,stroke:#e94560,color:#eee
+    style OK fill:#0f3460,stroke:#533483,color:#eee
+    style CGIR fill:#e94560,stroke:#1a1a2e,color:#fff
+    style R3xx fill:#533483,stroke:#e94560,color:#eee
+```
+
+### CGI Pipeline
+
+```mermaid
+flowchart LR
+    subgraph Parent["Server process"]
+        H["CgiHandler"]
+        ENV["Build CGI env"]
+        IN["stdin pipe"]
+        OUT["stdout pipe"]
+    end
+
+    subgraph Child["CGI process"]
+        EXEC["execve interpreter + script"]
+    end
+
+    H --> ENV
+    H -->|"fork()"| Child
+    H -->|"request body"| IN
+    IN --> EXEC
+    EXEC --> OUT
+    OUT -->|"parse CGI headers + body"| RESP["HttpResponse"]
+
+    style H fill:#16213e,stroke:#0f3460,color:#eee
+    style EXEC fill:#e94560,stroke:#1a1a2e,color:#fff
+    style RESP fill:#0f3460,stroke:#533483,color:#eee
+```
+
 ## Building
 
 ```bash
@@ -361,122 +534,6 @@ make lint
 ```
 
 For more details, see [FORMATTING.md](docs/FORMATTING.md)
-
-## Documentation
-
-### Feature Documentation
-
-- [CGI.md](docs/CGI.md) - CGI/1.1 implementation details
-- [REDIRECTS.md](docs/REDIRECTS.md) - HTTP redirects documentation
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture overview
-
-### Reference Documentation
-
-- [STRUCTURES.md](docs/STRUCTURES.md) - Data structures and classes
-- [TESTING.md](docs/TESTING.md) - Testing guide
-- [FORMATTING.md](docs/FORMATTING.md) - Code formatting guidelines
-
-### Technical Documentation
-
-- [SOCKETS.md](docs/SOCKETS.md) - Socket implementation
-- [POLL.md](docs/POLL.md) - Event loop implementation
-- [FILE_DESCRIPTORS.md](docs/FILE_DESCRIPTORS.md) - File descriptor management
-- [CGI_PIPES.md](docs/CGI_PIPES.md) - CGI pipes implementation
-- [PARAMETER_PASSING.md](docs/PARAMETER_PASSING.md) - Parameter passing details
-- [PIPES_AND_FDS.md](docs/PIPES_AND_FDS.md) - Pipes and file descriptors
-- [SEND_RECV_SOCKET.md](docs/SEND_RECV_SOCKET.md) - Socket send/receive operations
-
-## Project Structure
-
-```
-.
-├── src/           # Source files
-├── include/       # Header files
-├── config/        # Configuration examples
-├── www/           # Document root
-│   ├── cgi/       # CGI test scripts
-│   └── uploads/   # Upload directory
-├── docs/          # Documentation
-├── scripts/       # Utility scripts
-└── Makefile       # Build configuration
-```
-
-## Requirements
-
-- C++98 compatible compiler (clang++ or g++)
-- POSIX-compatible operating system (macOS, Linux)
-- Python 3 (for CGI scripts, optional)
-
-## Known Limitations
-
-### Architecture Limitations
-
-1. **Single-threaded** - All connections handled in one event loop using `poll()`
-2. **No multi-processing** - Single process handles all requests
-3. **No load balancing** - No built-in request distribution
-
-### CGI Limitations
-
-1. **CGI Timeout** - Maximum 30 seconds execution time for CGI scripts
-2. **Synchronous CGI** - CGI requests block until completion (non-blocking I/O for network, but CGI process blocks)
-3. **No FastCGI** - Only standard CGI/1.1 supported
-4. **No SCGI** - SCGI protocol not supported
-5. **Process overhead** - Each CGI request spawns a new process
-
-### Protocol Limitations
-
-1. **Limited Redirect Codes** - Only 301 (Moved Permanently) and 302 (Found) supported
-2. **No HTTP/2** - Only HTTP/1.0 and HTTP/1.1 supported
-3. **No WebSocket** - WebSocket protocol not supported
-4. **No HTTP/3** - HTTP/3 (QUIC) not supported
-
-### Feature Limitations
-
-1. **No SSL/TLS** - HTTPS not supported (HTTP only)
-2. **No compression** - No gzip/deflate compression
-3. **No caching** - No HTTP cache headers or cache control
-4. **No authentication** - No basic auth or other authentication methods
-5. **No rate limiting** - No built-in request rate limiting
-6. **No logging to file** - Logging only to stdout/stderr
-7. **No access logs** - No detailed access logging
-
-### Performance Limitations
-
-1. **Connection limit** - Default maximum 1000 concurrent connections (configurable in code)
-2. **Memory usage** - Request bodies loaded into memory (no streaming for large files)
-3. **File size limits** - Limited by `client_max_body_size` configuration
-4. **No zero-copy** - File serving uses standard read/write operations (could use `sendfile()` on Linux for optimization)
-
-### Performance Notes
-
-The server is optimized for C++98 constraints:
-- **Non-blocking I/O** - All sockets use non-blocking mode
-- **Single event loop** - Efficient `poll()`-based event handling
-- **Minimal copying** - Direct buffer operations where possible
-- **Connection pooling** - Keep-alive connections reuse sockets
-- **Efficient parsing** - Stream-based request parsing without full buffering
-
-For production use, consider:
-- Using `sendfile()` for large file transfers (Linux-specific)
-- Implementing response caching for static files
-- Adding connection pooling optimizations
-- Using epoll/kqueue instead of poll() for better scalability (requires platform-specific code)
-
-### Configuration Limitations
-
-1. **No regex locations** - Location matching is prefix-based only
-2. **No wildcards** - No wildcard support in location paths
-3. **No includes** - Configuration files cannot include other files
-4. **No variables** - No variable substitution in configuration
-5. **No conditional logic** - No if/else statements in configuration
-
-### Compatibility Notes
-
-- Tested on macOS and Linux
-- Requires POSIX-compatible system
-- C++98 standard compliance (no C++11+ features)
-- Compatible with modern browsers (Chrome, Firefox, Safari, Edge)
-- Compatible with standard HTTP clients (curl, wget, etc.)
 
 ## License
 
